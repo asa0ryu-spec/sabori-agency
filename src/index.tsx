@@ -8,7 +8,6 @@ type Bindings = {
 
 const app = new Hono<{ Bindings: Bindings }>()
 
-// OGP画像生成
 app.get('/og-image', async (c) => {
   const fontData = await fetch('https://raw.githubusercontent.com/google/fonts/main/ofl/shipporimincho/ShipporiMincho-Bold.ttf')
     .then((res) => {
@@ -59,10 +58,9 @@ app.get('/og-image', async (c) => {
   })
 })
 
-// メイン画面
 app.get('/', (c) => {
   const baseUrl = new URL(c.req.url).origin;
-  const ogImageUrl = `${baseUrl}/og-image`;
+  const ogImageUrl = baseUrl + "/og-image";
 
   return c.html(`
     <!DOCTYPE html>
@@ -251,11 +249,12 @@ app.get('/', (c) => {
           </div>
         </div>
         
-        <div class="footer-version">System v2.2.0 (Authorized by S.Rikyu)</div>
+        <div class="footer-version">System v2.2.1 (Authorized by S.Rikyu)</div>
       </div>
 
       <script>
-        // お役所感のあるローディングメッセージ
+        // 【重要】ブラウザ用JSは古い書き方(var, 文字列結合)で記述し、ビルドエラーを回避
+        
         var loadingMessages = [
           "申請書類の不備を再確認中...",
           "関係省庁との調整を行っております...",
@@ -315,7 +314,7 @@ app.get('/', (c) => {
             var url = URL.createObjectURL(blob);
             img.src = url;
             
-            // シンプルで安全な文字列結合
+            // シンプルな文字列結合
             var shareText = "【サボり許可局】\\n理由：「" + reason + "」\\n\\n正式に休養が認可されました。\\n#サボり許可局\\n";
             var shareUrl = "https://twitter.com/intent/tweet?text=" + encodeURIComponent(shareText) + "&url=" + encodeURIComponent("${baseUrl}");
             shareLink.href = shareUrl;
@@ -364,7 +363,7 @@ app.post('/generate', async (c) => {
     // 1. 却下判定 (1/10000)
     const isRejected = Math.random() < 0.0001; 
     
-    // 2. 長さのムラ判定 (AIへの指示)
+    // 2. 長さのムラ判定
     const lengthDice = Math.random();
     let lengthInstruction = "";
     if (lengthDice < 0.2) {
@@ -377,7 +376,7 @@ app.post('/generate', async (c) => {
 
     let prompt = "";
     if (isRejected) {
-      prompt = \`
+      prompt = `
         あなたは冷徹な鬼軍曹です。
         ユーザーの「サボりたい理由」を一刀両断し、却下通知を作成しなさい。
 
@@ -388,10 +387,10 @@ app.post('/generate', async (c) => {
         4. "description": ユーザーを論破し、働く喜びを説く (80文字以内)。
         5. "prescription": 「直ちに出社せよ」等の命令 (30文字以内)。
         
-        ユーザーの入力: "\${reason}"
-      \`;
+        ユーザーの入力: "${reason}"
+      `;
     } else {
-      prompt = \`
+      prompt = `
         あなたは優秀な官僚です。
         ユーザーの「怠惰な要望」の内容に応じて、最適な許可証のタイトルを決定し、医学・物理学・歴史を用いて正当化しなさい。
         
@@ -399,11 +398,11 @@ app.post('/generate', async (c) => {
         1. 出力はJSON形式のみ: { "header", "title", "description", "prescription" }
         2. "header": 入力内容に応じた証書名（早退許可証、在宅勤務命令書、欠勤許可証、遅刻容認書など）。
         3. "title": 難解な漢字用語 (20文字以内)。
-        4. "description": \${lengthInstruction} (文量に合わせて内容を調整せよ。最大100文字程度まで許容)
+        4. "description": ${lengthInstruction} (文量に合わせて内容を調整せよ。最大100文字程度まで許容)
         5. "prescription": マイルドな提案表現にする (30文字以内)。
 
-        ユーザーの入力: "\${reason}"
-      \`;
+        ユーザーの入力: "${reason}"
+      `;
     }
 
     let aiResult;
@@ -426,7 +425,7 @@ app.post('/generate', async (c) => {
 
     const fontData = await fetch('https://raw.githubusercontent.com/google/fonts/main/ofl/shipporimincho/ShipporiMincho-Bold.ttf')
       .then((res) => {
-        if (!res.ok) throw new Error(\`Font fetch failed: \${res.status} \${res.statusText}\`);
+        if (!res.ok) throw new Error(`Font fetch failed: ${res.status} ${res.statusText}`);
         return res.arrayBuffer();
       })
 
@@ -440,7 +439,6 @@ app.post('/generate', async (c) => {
     
     const headerText = aiResult.header || (isRejected ? '却下通知書' : '欠勤許可証');
 
-    // 文字サイズ自動調整ロジック
     const titleSize = (aiResult.title && aiResult.title.length > 12) ? '24px' : '32px';
     
     let descSize = '20px';
@@ -468,7 +466,7 @@ app.post('/generate', async (c) => {
            flexDirection: 'column',
            width: '100%',
            height: '100%',
-           border: \`4px solid \${borderColor}\`,
+           border: `4px solid ${borderColor}`,
            padding: '4px',
         }}>
            <div style={{
@@ -476,7 +474,7 @@ app.post('/generate', async (c) => {
              flexDirection: 'column',
              width: '100%',
              height: '100%',
-             border: \`2px solid \${borderColor}\`,
+             border: `2px solid ${borderColor}`,
              padding: '20px',
              position: 'relative',
            }}>
@@ -495,8 +493,8 @@ app.post('/generate', async (c) => {
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', borderBottom: '2px solid #333', paddingBottom: '10px', marginBottom: '30px' }}>
-              <div style={{ fontSize: '20px' }}>{\`第 \${issueNumber} 号\`}</div>
-              <div style={{ fontSize: '16px' }}>{\`発行日: \${today}\`}</div>
+              <div style={{ fontSize: '20px' }}>{`第 ${issueNumber} 号`}</div>
+              <div style={{ fontSize: '16px' }}>{`発行日: ${today}`}</div>
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '20px' }}>
@@ -544,7 +542,7 @@ app.post('/generate', async (c) => {
                 bottom: '-10px',
                 width: '100px',
                 height: '100px',
-                border: \`4px solid \${stampColor}\`,
+                border: `4px solid ${stampColor}`,
                 borderRadius: '8px',
                 display: 'flex',
                 alignItems: 'center',
@@ -554,7 +552,7 @@ app.post('/generate', async (c) => {
                 fontWeight: 'bold',
                 transform: 'rotate(-15deg)',
                 opacity: 0.8,
-                boxShadow: \`0 0 0 2px \${stampColor} inset\` 
+                boxShadow: `0 0 0 2px ${stampColor} inset` 
               }}>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', lineHeight: '1' }}>
                   <span>{stampText}</span>
