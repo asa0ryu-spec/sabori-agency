@@ -170,25 +170,48 @@ app.post('/generate', async (c) => {
     }
 
     const genAI = new GoogleGenerativeAI(c.env.GEMINI_API_KEY)
-    
-    // Gemini 2.5
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" })
 
-    // プロンプト修正: 文字数制限を厳格に追加
-    const prompt = `
-      あなたは冷徹かつ優秀な官僚です。
-      ユーザーの入力した「サボりたい理由」を、医学的・科学的・歴史的な権威を用いた「正当な休養事由」に変換しなさい。
-      
-      # ルール
-      1. 出力は必ずJSON形式のみとする。
-      2. キーは "title", "description", "prescription" とする。
-      3. "title" (病名): 難解な漢字用語。**20文字以内**。
-      4. "description" (理由): 物理法則や偉人の逸話をこじつける。**80文字以内**で簡潔にまとめること。長すぎると処刑されます。
-      5. "prescription" (処方): 甘やかす内容。**30文字以内**。
-      6. 純粋なJSON文字列だけを返しなさい。
+    // -------------------------------------------------------------
+    // 【運命のダイスロール】
+    // 1/10000 の確率で「却下 (isRejected)」フラグを立てる
+    // -------------------------------------------------------------
+    const isRejected = Math.random() < 0.0001; 
+    // ※テストしたい場合はここを < 0.5 などに書き換えてデプロイしてください
 
-      ユーザーの入力: "${reason}"
-    `
+    let prompt = "";
+
+    if (isRejected) {
+      // 激レア：却下モードのプロンプト
+      prompt = `
+        あなたは冷徹な鬼軍曹です。
+        ユーザーの「サボりたい理由」を一刀両断し、出社を命じる「却下通知」を作成しなさい。
+
+        # ルール
+        1. 出力はJSON形式のみ (title, description, prescription)。
+        2. "title": 「却下」「不許可」を含む厳しい言葉 (20文字以内)。
+        3. "description": ユーザーの甘えを論理的に論破し、働くことの喜び（皮肉）を説く (80文字以内)。
+        4. "prescription": 「直ちに出社せよ」「甘えるな」等の厳しい命令 (30文字以内)。
+        5. 純粋なJSONのみを返すこと。
+        
+        ユーザーの入力: "${reason}"
+      `;
+    } else {
+      // 通常：許可モードのプロンプト（処方をマイルド化）
+      prompt = `
+        あなたは慈愛に満ちたカウンセラーであり、同時に優秀な官僚です。
+        ユーザーの「サボりたい理由」を肯定し、「正当な休養事由」に変換しなさい。
+        
+        # ルール
+        1. 出力はJSON形式のみ (title, description, prescription)。
+        2. "title": 難解な漢字用語 (20文字以内)。
+        3. "description": 物理法則や偉人の逸話をこじつけ、休むことの正当性を証明する (80文字以内)。
+        4. "prescription": **「～しましょう」「～してあげてください」といった、柔らかく包み込むような表現**にする (30文字以内)。
+        5. 純粋なJSONのみを返すこと。
+
+        ユーザーの入力: "${reason}"
+      `;
+    }
 
     let aiResult;
     try {
@@ -201,9 +224,9 @@ app.post('/generate', async (c) => {
     } catch (aiError) {
       console.error(aiError);
       aiResult = {
-        title: "緊急自動承認措置",
+        title: "緊急システム障害",
         description: "AIの思考回路が貴殿の怠惰への熱意に圧倒され処理を放棄しました。",
-        prescription: "何も考えず、ただ泥のように眠ること。"
+        prescription: "何も考えず、ただ泥のように眠りましょう。"
       };
     }
 
@@ -214,6 +237,16 @@ app.post('/generate', async (c) => {
       })
 
     const today = new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit' })
+    
+    // 【こだわり①】ランダムな発行番号 (1000〜9999)
+    const issueNumber = Math.floor(Math.random() * 9000) + 1000;
+
+    // デザイン定義（却下時は赤基調にする）
+    const bgColor = isRejected ? '#ffeef0' : '#f4f1ea'; // 却下なら薄い赤
+    const borderColor = isRejected ? '#8a1c1c' : '#5c4033'; // 却下なら濃い赤枠
+    const stampText = isRejected ? '却下' : '許可'; // ハンコの文字
+    const stampColor = '#d93025'; // ハンコは常に赤
+    const headerText = isRejected ? '欠勤申請 却下通知書' : '欠勤許可証';
 
     const svg = await satori(
       <div
@@ -222,7 +255,7 @@ app.post('/generate', async (c) => {
           flexDirection: 'column',
           width: '100%',
           height: '100%',
-          backgroundColor: '#f4f1ea',
+          backgroundColor: bgColor,
           padding: '20px', 
           fontFamily: '"Shippori Mincho"',
           position: 'relative',
@@ -233,7 +266,7 @@ app.post('/generate', async (c) => {
            flexDirection: 'column',
            width: '100%',
            height: '100%',
-           border: '4px solid #5c4033',
+           border: `4px solid ${borderColor}`,
            padding: '4px',
         }}>
            <div style={{
@@ -241,7 +274,7 @@ app.post('/generate', async (c) => {
              flexDirection: 'column',
              width: '100%',
              height: '100%',
-             border: '2px solid #5c4033',
+             border: `2px solid ${borderColor}`,
              padding: '20px',
              position: 'relative',
            }}>
@@ -256,16 +289,18 @@ app.post('/generate', async (c) => {
               fontWeight: 'bold',
               whiteSpace: 'nowrap',
             }}>
-              AUTHORIZED
+              {isRejected ? 'REJECTED' : 'AUTHORIZED'}
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', borderBottom: '2px solid #333', paddingBottom: '10px', marginBottom: '30px' }}>
-              <div style={{ fontSize: '20px' }}>第 8008 号</div>
+              <div style={{ fontSize: '20px' }}>{`第 ${issueNumber} 号`}</div>
               <div style={{ fontSize: '16px' }}>{`発行日: ${today}`}</div>
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '20px' }}>
-              <div style={{ fontSize: '42px', fontWeight: 'bold', letterSpacing: '0.2em' }}>欠勤許可証</div>
+              <div style={{ fontSize: '42px', fontWeight: 'bold', letterSpacing: '0.1em', color: isRejected ? '#b91c1c' : '#000' }}>
+                {headerText}
+              </div>
             </div>
 
             <div style={{ fontSize: '24px', marginBottom: '30px' }}>
@@ -273,19 +308,23 @@ app.post('/generate', async (c) => {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', flexGrow: 1 }}>
-              <div style={{ display: 'flex', marginBottom: '8px', fontSize: '18px', color: '#555' }}>【診断名】</div>
-              {/* フォントサイズ縮小 & 行間調整 */}
+              <div style={{ display: 'flex', marginBottom: '8px', fontSize: '18px', color: '#555' }}>
+                {isRejected ? '【却下事由】' : '【診断名】'}
+              </div>
               <div style={{ fontSize: '28px', fontWeight: 'bold', marginBottom: '25px', color: '#b91c1c', lineHeight: '1.2' }}>
                 {aiResult.title}
               </div>
 
-              <div style={{ display: 'flex', marginBottom: '8px', fontSize: '18px', color: '#555' }}>【認定理由】</div>
-              {/* フォントサイズ縮小 & 文字数制限対応 */}
+              <div style={{ display: 'flex', marginBottom: '8px', fontSize: '18px', color: '#555' }}>
+                 {isRejected ? '【判定詳細】' : '【認定理由】'}
+              </div>
               <div style={{ fontSize: '18px', lineHeight: '1.5', marginBottom: '25px', textAlign: 'justify' }}>
                 {aiResult.description}
               </div>
 
-              <div style={{ display: 'flex', marginBottom: '8px', fontSize: '18px', color: '#555' }}>【処方・措置】</div>
+              <div style={{ display: 'flex', marginBottom: '8px', fontSize: '18px', color: '#555' }}>
+                 {isRejected ? '【命令】' : '【処方・措置】'}
+              </div>
               <div style={{ fontSize: '20px', fontWeight: 'bold' }}>
                 {aiResult.prescription}
               </div>
@@ -303,20 +342,20 @@ app.post('/generate', async (c) => {
                 bottom: '-10px',
                 width: '100px',
                 height: '100px',
-                border: '4px solid #d93025',
+                border: `4px solid ${stampColor}`,
                 borderRadius: '8px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                color: '#d93025',
+                color: stampColor,
                 fontSize: '24px',
                 fontWeight: 'bold',
                 transform: 'rotate(-15deg)',
                 opacity: 0.8,
-                boxShadow: '0 0 0 2px #d93025 inset' 
+                boxShadow: `0 0 0 2px ${stampColor} inset` 
               }}>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', lineHeight: '1' }}>
-                  <span>許可</span>
+                  <span>{stampText}</span>
                   <span style={{ fontSize: '14px', marginTop: '5px' }}>局長印</span>
                 </div>
               </div>
