@@ -8,6 +8,7 @@ type Bindings = {
 
 const app = new Hono<{ Bindings: Bindings }>()
 
+// OGP画像生成
 app.get('/og-image', async (c) => {
   const fontData = await fetch('https://raw.githubusercontent.com/google/fonts/main/ofl/shipporimincho/ShipporiMincho-Bold.ttf')
     .then((res) => {
@@ -58,6 +59,7 @@ app.get('/og-image', async (c) => {
   })
 })
 
+// メイン画面
 app.get('/', (c) => {
   const baseUrl = new URL(c.req.url).origin;
   const ogImageUrl = `${baseUrl}/og-image`;
@@ -70,23 +72,16 @@ app.get('/', (c) => {
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <meta name="author" content="Sabo Rikyu (Hidden Layer Works)">
       
-      <!-- SEO Meta Tags -->
       <title>サボり許可局 | Official Excuse Agency</title>
-      <meta name="description" content="「会社に行きたくない」「なんとなくダルい」。AI官僚がその怠惰を医学・歴史・物理学を用いて論理的に正当化し、正式な『欠勤許可証』を発行します。">
-      <meta name="keywords" content="サボり, 言い訳, AI, 生成, 診断, 欠勤, 理由, ジェネレーター">
+      <meta name="description" content="AI官僚が、あなたの怠惰を正当な休養事由として認可します。">
       
-      <!-- Open Graph / Facebook / LINE -->
       <meta property="og:type" content="website">
       <meta property="og:url" content="${baseUrl}">
       <meta property="og:title" content="サボり許可局 | Official Excuse Agency">
       <meta property="og:description" content="AI官僚が、あなたの怠惰を正当な休養事由として認可します。">
       <meta property="og:image" content="${ogImageUrl}">
 
-      <!-- Twitter -->
       <meta name="twitter:card" content="summary_large_image">
-      <meta name="twitter:url" content="${baseUrl}">
-      <meta name="twitter:title" content="サボり許可局 | Official Excuse Agency">
-      <meta name="twitter:description" content="AI官僚が、あなたの怠惰を正当な休養事由として認可します。">
       <meta name="twitter:image" content="${ogImageUrl}">
 
       <style>
@@ -195,7 +190,7 @@ app.get('/', (c) => {
           border-radius: 3px;
           margin-top: 5px;
           display: block;
-          user-select: all; /* ワンタップで選択可能に */
+          user-select: all;
         }
 
         #result-area {
@@ -211,7 +206,7 @@ app.get('/', (c) => {
           box-shadow: 0 10px 25px rgba(0,0,0,0.1);
           margin-bottom: 20px;
         }
-        .loading { font-size: 0.8rem; color: #888; margin-top: 10px; display: none; }
+        .loading { font-size: 0.8rem; color: #555; margin-top: 10px; display: none; font-style: italic; }
         .error-log { color: red; font-size: 0.8rem; margin-top: 10px; text-align: left; white-space: pre-wrap; display: none; background: #fff0f0; padding: 10px; border: 1px solid red;}
         .footer-version { font-size: 0.6rem; color: #ccc; margin-top: 30px; }
       </style>
@@ -223,10 +218,10 @@ app.get('/', (c) => {
         
         <div class="input-group">
           <p>申請理由（嘘は不要です）</p>
-          <input type="text" id="reason" placeholder="例：なんとなくダルい" maxlength="50">
+          <input type="text" id="reason" placeholder="例：帰りたい、働きたくない" maxlength="50">
           <br>
           <button id="submit-btn" class="btn btn-submit" onclick="generateExcuse()">申請を行う</button>
-          <div id="loading" class="loading">論理構築中... 官僚がデータベースを検索しています...</div>
+          <div id="loading" class="loading"></div>
           <div id="error-log" class="error-log"></div>
         </div>
 
@@ -241,7 +236,6 @@ app.get('/', (c) => {
             </a>
           </div>
 
-          <!-- 袖の下（マネタイズ）エリア -->
           <div class="bribe-section">
             <p style="font-size: 0.8rem; margin-bottom: 10px;">この許可証は有効ですか？</p>
             
@@ -251,18 +245,32 @@ app.get('/', (c) => {
             
             <div class="bribe-email-box">
               <span style="font-size: 0.7rem; color: #555;">▼ 受取人メールアドレス (タップしてコピー)</span>
-              <!-- hidden.layer.works@gmail.com -->
-              <code class="bribe-email" onclick="copyEmail(this)">YOUR_EMAIL@example.com</code>
+              <code class="bribe-email" onclick="copyEmail(this)">hidden.layer.works@gmail.com</code>
             </div>
             
             <p style="font-size: 0.7rem; color: #aaa; margin-top: 10px;">※ 納品された物資は、局長の怠惰な生活維持に使用されます。</p>
           </div>
         </div>
         
-        <div class="footer-version">System v1.2.0 (Authorized by S.Rikyu)</div>
+        <div class="footer-version">System v2.1.0 (Authorized by S.Rikyu)</div>
       </div>
 
       <script>
+        // ロード中の洒落たメッセージ集
+        const loadingMessages = [
+          "貴殿の社会的責任を希釈中...",
+          "労働意欲の減衰係数を計算中...",
+          "上司の思考回路へハッキングを試行中...",
+          "サボりのバタフライエフェクトをシミュレーション中...",
+          "法的抜け穴を全力で検索中...",
+          "有給休暇の残存エネルギーを解析中...",
+          "宇宙の意思と接続中...",
+          "カフェイン濃度を確認中...",
+          "「仕方ない」という空気感を醸成中..."
+        ];
+
+        let loadingInterval;
+
         async function generateExcuse() {
           const reason = document.getElementById('reason').value;
           if (!reason) return alert('理由を入力してください');
@@ -279,6 +287,12 @@ app.get('/', (c) => {
           resultArea.style.display = 'none';
           errorLog.style.display = 'none';
           errorLog.textContent = '';
+
+          // ランダムメッセージ開始
+          loading.textContent = loadingMessages[Math.floor(Math.random() * loadingMessages.length)];
+          loadingInterval = setInterval(() => {
+            loading.textContent = loadingMessages[Math.floor(Math.random() * loadingMessages.length)];
+          }, 1500); // 1.5秒ごとに切り替え
 
           try {
             const response = await fetch('/generate', {
@@ -306,16 +320,16 @@ app.get('/', (c) => {
             errorLog.textContent = '【エラー詳細】\\n' + e.message;
             console.error(e);
           } finally {
+            clearInterval(loadingInterval);
             btn.disabled = false;
             loading.style.display = 'none';
           }
         }
 
-        // メールアドレスをクリップボードにコピーする機能
         function copyEmail(element) {
           const email = element.textContent;
           navigator.clipboard.writeText(email).then(() => {
-            alert('局長のメールアドレスをコピーしました。Amazonの宛先欄に貼り付けてください。');
+            alert('局長のメールアドレスをコピーしました。');
           }).catch(err => {
             console.error('Copy failed', err);
           });
@@ -341,35 +355,50 @@ app.post('/generate', async (c) => {
     const genAI = new GoogleGenerativeAI(c.env.GEMINI_API_KEY)
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" })
 
-    // 1/10000 の確率で却下
+    // 1. 却下判定 (1/10000)
     const isRejected = Math.random() < 0.0001; 
+    
+    // 2. 長さのムラ判定 (許可の場合のみ)
+    // 0.0 - 0.2: Short (一言)
+    // 0.2 - 0.8: Normal (通常)
+    // 0.8 - 1.0: Long (長文・饒舌)
+    const lengthDice = Math.random();
+    let lengthInstruction = "";
+    
+    if (lengthDice < 0.2) {
+        lengthInstruction = "【モード：簡潔】一言で、格言のようにバッサリと言い切ること。説明は最小限に。余計な修飾語は省け。";
+    } else if (lengthDice < 0.8) {
+        lengthInstruction = "【モード：通常】論理的に、かつ説得力のある文章で記述すること。適度な長さで。";
+    } else {
+        lengthInstruction = "【モード：饒舌】学術論文や哲学書のように、無駄に長く詳細に、回りくどく記述すること。知識をひけらかせ。";
+    }
 
     let prompt = "";
     if (isRejected) {
       prompt = `
         あなたは冷徹な鬼軍曹です。
-        ユーザーの「サボりたい理由」を一刀両断し、出社を命じる「却下通知」を作成しなさい。
+        ユーザーの「サボりたい理由」を一刀両断し、却下通知を作成しなさい。
 
         # ルール
-        1. 出力はJSON形式のみ (title, description, prescription)。
-        2. "title": 「却下」「不許可」を含む厳しい言葉 (20文字以内)。
-        3. "description": ユーザーの甘えを論理的に論破し、働くことの喜び（皮肉）を説く (80文字以内)。
-        4. "prescription": 「直ちに出社せよ」「甘えるな」等の厳しい命令 (30文字以内)。
-        5. 純粋なJSONのみを返すこと。
+        1. 出力はJSON形式のみ: { "header", "title", "description", "prescription" }
+        2. "header": 「欠勤申請 却下通知書」で固定。
+        3. "title": 「却下」「不許可」「甘え」等の厳しい言葉 (20文字以内)。
+        4. "description": ユーザーを論破し、働く喜びを説く (80文字以内)。
+        5. "prescription": 「直ちに出社せよ」等の命令 (30文字以内)。
         
         ユーザーの入力: "${reason}"
       `;
     } else {
       prompt = `
-        あなたは慈愛に満ちたカウンセラーであり、同時に優秀な官僚です。
-        ユーザーの「サボりたい理由」を肯定し、「正当な休養事由」に変換しなさい。
+        あなたは優秀な官僚です。
+        ユーザーの「怠惰な要望」の内容に応じて、最適な許可証のタイトルを決定し、医学・物理学・歴史を用いて正当化しなさい。
         
         # ルール
-        1. 出力はJSON形式のみ (title, description, prescription)。
-        2. "title": 難解な漢字用語 (20文字以内)。
-        3. "description": 物理法則や偉人の逸話をこじつけ、休むことの正当性を証明する (80文字以内)。
-        4. "prescription": **「～しましょう」「～してあげてください」といった、柔らかく包み込むような表現**にする (30文字以内)。
-        5. 純粋なJSONのみを返すこと。
+        1. 出力はJSON形式のみ: { "header", "title", "description", "prescription" }
+        2. "header": 入力内容に応じた証書名（早退許可証、在宅勤務命令書、欠勤許可証、遅刻容認書など）。
+        3. "title": 難解な漢字用語 (20文字以内)。
+        4. "description": ${lengthInstruction} (文量に合わせて内容を調整せよ。最大100文字程度まで許容)
+        5. "prescription": マイルドな提案表現にする (30文字以内)。
 
         ユーザーの入力: "${reason}"
       `;
@@ -386,6 +415,7 @@ app.post('/generate', async (c) => {
     } catch (aiError) {
       console.error(aiError);
       aiResult = {
+        header: "緊急避難命令書",
         title: "緊急システム障害",
         description: "AIの思考回路が貴殿の怠惰への熱意に圧倒され処理を放棄しました。",
         prescription: "何も考えず、ただ泥のように眠りましょう。"
@@ -405,7 +435,19 @@ app.post('/generate', async (c) => {
     const borderColor = isRejected ? '#8a1c1c' : '#5c4033'; 
     const stampText = isRejected ? '却下' : '許可'; 
     const stampColor = '#d93025'; 
-    const headerText = isRejected ? '欠勤申請 却下通知書' : '欠勤許可証';
+    
+    const headerText = aiResult.header || (isRejected ? '却下通知書' : '欠勤許可証');
+
+    // 文字サイズ自動調整ロジック (ムラっ気対応)
+    const titleSize = (aiResult.title && aiResult.title.length > 12) ? '24px' : '32px';
+    
+    // Descriptionのサイズ調整を強化
+    let descSize = '20px';
+    const descLen = aiResult.description ? aiResult.description.length : 0;
+    if (descLen > 90) descSize = '15px';
+    else if (descLen > 60) descSize = '17px';
+    
+    const headerSize = (headerText.length > 6) ? '36px' : '42px';
 
     const svg = await satori(
       <div
@@ -425,7 +467,7 @@ app.post('/generate', async (c) => {
            flexDirection: 'column',
            width: '100%',
            height: '100%',
-           border: `4px solid ${borderColor}`,
+           border: \`4px solid \${borderColor}\`,
            padding: '4px',
         }}>
            <div style={{
@@ -433,7 +475,7 @@ app.post('/generate', async (c) => {
              flexDirection: 'column',
              width: '100%',
              height: '100%',
-             border: `2px solid ${borderColor}`,
+             border: \`2px solid \${borderColor}\`,
              padding: '20px',
              position: 'relative',
            }}>
@@ -452,12 +494,12 @@ app.post('/generate', async (c) => {
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', borderBottom: '2px solid #333', paddingBottom: '10px', marginBottom: '30px' }}>
-              <div style={{ fontSize: '20px' }}>{`第 ${issueNumber} 号`}</div>
-              <div style={{ fontSize: '16px' }}>{`発行日: ${today}`}</div>
+              <div style={{ fontSize: '20px' }}>{`第 \${issueNumber} 号`}</div>
+              <div style={{ fontSize: '16px' }}>{`発行日: \${today}`}</div>
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '20px' }}>
-              <div style={{ fontSize: '42px', fontWeight: 'bold', letterSpacing: '0.1em', color: isRejected ? '#b91c1c' : '#000' }}>
+              <div style={{ fontSize: headerSize, fontWeight: 'bold', letterSpacing: '0.1em', color: isRejected ? '#b91c1c' : '#000' }}>
                 {headerText}
               </div>
             </div>
@@ -470,14 +512,14 @@ app.post('/generate', async (c) => {
               <div style={{ display: 'flex', marginBottom: '8px', fontSize: '18px', color: '#555' }}>
                 {isRejected ? '【却下事由】' : '【診断名】'}
               </div>
-              <div style={{ fontSize: '28px', fontWeight: 'bold', marginBottom: '25px', color: '#b91c1c', lineHeight: '1.2' }}>
+              <div style={{ fontSize: titleSize, fontWeight: 'bold', marginBottom: '25px', color: '#b91c1c', lineHeight: '1.2' }}>
                 {aiResult.title}
               </div>
 
               <div style={{ display: 'flex', marginBottom: '8px', fontSize: '18px', color: '#555' }}>
                  {isRejected ? '【判定詳細】' : '【認定理由】'}
               </div>
-              <div style={{ fontSize: '18px', lineHeight: '1.5', marginBottom: '25px', textAlign: 'justify' }}>
+              <div style={{ fontSize: descSize, lineHeight: '1.5', marginBottom: '25px', textAlign: 'justify' }}>
                 {aiResult.description}
               </div>
 
@@ -501,7 +543,7 @@ app.post('/generate', async (c) => {
                 bottom: '-10px',
                 width: '100px',
                 height: '100px',
-                border: `4px solid ${stampColor}`,
+                border: \`4px solid \${stampColor}\`,
                 borderRadius: '8px',
                 display: 'flex',
                 alignItems: 'center',
@@ -511,7 +553,7 @@ app.post('/generate', async (c) => {
                 fontWeight: 'bold',
                 transform: 'rotate(-15deg)',
                 opacity: 0.8,
-                boxShadow: `0 0 0 2px ${stampColor} inset` 
+                boxShadow: \`0 0 0 2px \${stampColor} inset\` 
               }}>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', lineHeight: '1' }}>
                   <span>{stampText}</span>
