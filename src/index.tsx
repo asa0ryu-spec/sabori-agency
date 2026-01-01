@@ -8,9 +8,6 @@ type Bindings = {
 
 const app = new Hono<{ Bindings: Bindings }>()
 
-// ------------------------------------------------------------------
-// OGP画像（SNSシェア用看板）を生成するエンドポイント
-// ------------------------------------------------------------------
 app.get('/og-image', async (c) => {
   const fontData = await fetch('https://raw.githubusercontent.com/google/fonts/main/ofl/shipporimincho/ShipporiMincho-Bold.ttf')
     .then((res) => {
@@ -61,10 +58,6 @@ app.get('/og-image', async (c) => {
   })
 })
 
-
-// ------------------------------------------------------------------
-// メインページ
-// ------------------------------------------------------------------
 app.get('/', (c) => {
   const baseUrl = new URL(c.req.url).origin;
   const ogImageUrl = `${baseUrl}/og-image`;
@@ -274,6 +267,7 @@ app.get('/', (c) => {
             const url = URL.createObjectURL(blob);
             img.src = url;
             
+            // 修正箇所：変数を埋め込む記号の記述を修正
             const shareText = encodeURIComponent(\`【サボり許可局】\\n理由：「\${reason}」\\n\\n正式に休養が認可されました。\\n#サボり許可局\\n\`);
             const shareUrl = "https://twitter.com/intent/tweet?text=" + shareText + "&url=" + encodeURIComponent("${baseUrl}");
             shareLink.href = shareUrl;
@@ -309,6 +303,7 @@ app.post('/generate', async (c) => {
     const genAI = new GoogleGenerativeAI(c.env.GEMINI_API_KEY)
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" })
 
+    // 1/10000 の確率で却下
     const isRejected = Math.random() < 0.0001; 
 
     let prompt = "";
@@ -392,7 +387,7 @@ app.post('/generate', async (c) => {
            flexDirection: 'column',
            width: '100%',
            height: '100%',
-           border: \`4px solid \${borderColor}\`,
+           border: `4px solid ${borderColor}`,
            padding: '4px',
         }}>
            <div style={{
@@ -400,7 +395,7 @@ app.post('/generate', async (c) => {
              flexDirection: 'column',
              width: '100%',
              height: '100%',
-             border: \`2px solid \${borderColor}\`,
+             border: `2px solid ${borderColor}`,
              padding: '20px',
              position: 'relative',
            }}>
@@ -419,8 +414,8 @@ app.post('/generate', async (c) => {
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', borderBottom: '2px solid #333', paddingBottom: '10px', marginBottom: '30px' }}>
-              <div style={{ fontSize: '20px' }}>{`第 \${issueNumber} 号`}</div>
-              <div style={{ fontSize: '16px' }}>{`発行日: \${today}`}</div>
+              <div style={{ fontSize: '20px' }}>{`第 ${issueNumber} 号`}</div>
+              <div style={{ fontSize: '16px' }}>{`発行日: ${today}`}</div>
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '20px' }}>
@@ -468,7 +463,7 @@ app.post('/generate', async (c) => {
                 bottom: '-10px',
                 width: '100px',
                 height: '100px',
-                border: \`4px solid \${stampColor}\`,
+                border: `4px solid ${stampColor}`,
                 borderRadius: '8px',
                 display: 'flex',
                 alignItems: 'center',
@@ -478,7 +473,7 @@ app.post('/generate', async (c) => {
                 fontWeight: 'bold',
                 transform: 'rotate(-15deg)',
                 opacity: 0.8,
-                boxShadow: \`0 0 0 2px \${stampColor} inset\` 
+                boxShadow: `0 0 0 2px ${stampColor} inset` 
               }}>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', lineHeight: '1' }}>
                   <span>{stampText}</span>
