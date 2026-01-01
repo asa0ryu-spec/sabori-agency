@@ -197,8 +197,8 @@ app.post('/generate', async (c) => {
     const cleanJsonText = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
     const aiResult = JSON.parse(cleanJsonText);
 
-    // 【修正箇所】Github CDNではなく、より安定したunpkg (NPM CDN) からフォントを取得
-    const fontData = await fetch('https://unpkg.com/@fontsource/noto-serif-jp@5.0.8/files/noto-serif-jp-japanese-700-normal.woff')
+    // 【修正箇所】GithubのRawドメイン（最も確実なルート）を使用
+    const fontData = await fetch('https://raw.githubusercontent.com/google/fonts/main/ofl/notoserifjp/NotoSerifJP-Bold.otf')
       .then((res) => {
         if (!res.ok) throw new Error(`Font fetch failed: ${res.status} ${res.statusText}`);
         return res.arrayBuffer();
