@@ -165,14 +165,38 @@ app.get('/', (c) => {
         }
         .btn-share:hover { background-color: #333; }
 
+        .bribe-section {
+          margin-top: 40px;
+          border-top: 1px dashed #ccc;
+          padding-top: 20px;
+        }
         .bribe-link {
-          margin-top: 30px;
-          font-size: 0.8rem;
-          color: #888;
+          font-size: 0.9rem;
+          color: #b91c1c;
           text-decoration: underline;
           cursor: pointer;
+          font-weight: bold;
         }
-        .bribe-link:hover { color: #b91c1c; }
+        .bribe-link:hover { color: #8a1c1c; }
+        .bribe-email-box {
+          margin-top: 15px;
+          padding: 15px;
+          background: #f9f9f9;
+          border: 1px solid #e0e0e0;
+          border-radius: 4px;
+          display: inline-block;
+          text-align: center;
+        }
+        .bribe-email {
+          font-family: monospace;
+          background: #fff;
+          padding: 5px 10px;
+          border: 1px solid #ddd;
+          border-radius: 3px;
+          margin-top: 5px;
+          display: block;
+          user-select: all; /* ワンタップで選択可能に */
+        }
 
         #result-area {
           margin-top: 20px;
@@ -218,19 +242,24 @@ app.get('/', (c) => {
           </div>
 
           <!-- 袖の下（マネタイズ）エリア -->
-          <div style="margin-top: 40px; border-top: 1px dashed #ccc; padding-top: 20px;">
-            <p style="font-size: 0.8rem; margin-bottom: 5px;">この許可証は有効ですか？</p>
+          <div class="bribe-section">
+            <p style="font-size: 0.8rem; margin-bottom: 10px;">この許可証は有効ですか？</p>
             
-            <!-- 【重要】GifteeのURLなどへ書き換えてください -->
-            <a href="https://giftee.com/" target="_blank" class="bribe-link">
-              局長室へ袖の下（匿名ギフト）を届ける
+            <a href="https://www.amazon.co.jp/dp/B004N3APGO" target="_blank" class="bribe-link">
+              局長室へ袖の下（Amazonギフト券）を届ける
             </a>
             
-            <p style="font-size: 0.7rem; color: #aaa; margin-top: 5px;">※ 納品された物資は、局長の怠惰な生活維持に使用されます。</p>
+            <div class="bribe-email-box">
+              <span style="font-size: 0.7rem; color: #555;">▼ 受取人メールアドレス (タップしてコピー)</span>
+              <!-- 【最重要】ここをご自身のメアドに書き換えてください -->
+              <code class="bribe-email" onclick="copyEmail(this)">YOUR_EMAIL@example.com</code>
+            </div>
+            
+            <p style="font-size: 0.7rem; color: #aaa; margin-top: 10px;">※ 納品された物資は、局長の怠惰な生活維持に使用されます。</p>
           </div>
         </div>
         
-        <div class="footer-version">System v1.1.0 (Authorized by S.Rikyu)</div>
+        <div class="footer-version">System v1.2.0 (Authorized by S.Rikyu)</div>
       </div>
 
       <script>
@@ -267,7 +296,6 @@ app.get('/', (c) => {
             const url = URL.createObjectURL(blob);
             img.src = url;
             
-            // 修正箇所：変数を埋め込む記号の記述を修正
             const shareText = encodeURIComponent(\`【サボり許可局】\\n理由：「\${reason}」\\n\\n正式に休養が認可されました。\\n#サボり許可局\\n\`);
             const shareUrl = "https://twitter.com/intent/tweet?text=" + shareText + "&url=" + encodeURIComponent("${baseUrl}");
             shareLink.href = shareUrl;
@@ -281,6 +309,16 @@ app.get('/', (c) => {
             btn.disabled = false;
             loading.style.display = 'none';
           }
+        }
+
+        // メールアドレスをクリップボードにコピーする機能
+        function copyEmail(element) {
+          const email = element.textContent;
+          navigator.clipboard.writeText(email).then(() => {
+            alert('局長のメールアドレスをコピーしました。Amazonの宛先欄に貼り付けてください。');
+          }).catch(err => {
+            console.error('Copy failed', err);
+          });
         }
       </script>
     </body>
