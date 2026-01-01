@@ -8,34 +8,6 @@ type Bindings = {
 
 const app = new Hono<{ Bindings: Bindings }>()
 
-// ------------------------------------------------------------------
-// ヘルパー関数: Google Fontsからフォントデータを動的に取得する
-// ------------------------------------------------------------------
-async function loadGoogleFont({ family, weight, text }: { family: string; weight?: number; text?: string }) {
-  const params = new URLSearchParams({
-    family: `${family}${weight ? `:wght@${weight}` : ''}`,
-  })
-  if (text) params.append('text', text)
-  
-  // CSSを取得
-  const cssUrl = `https://fonts.googleapis.com/css2?${params.toString()}`
-  const css = await fetch(cssUrl, {
-    headers: {
-      // WOFF形式を返してもらうためのUser-Agent偽装
-      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Safari/537.36',
-    },
-  }).then((res) => res.text())
-
-  // CSSからフォントファイルのURLを抽出
-  const resource = css.match(/src: url\((.+?)\) format\('(opentype|truetype|woff)'\)/) || css.match(/src: url\((.+?)\)/)
-  
-  if (!resource) throw new Error('Failed to find font url in css')
-
-  // フォントファイル自体を取得
-  const res = await fetch(resource[1])
-  return res.arrayBuffer()
-}
-
 app.get('/', (c) => {
   return c.html(`
     <!DOCTYPE html>
@@ -45,9 +17,9 @@ app.get('/', (c) => {
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <title>サボり許可局 | Official Excuse Agency</title>
       <style>
-        @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@700&display=swap');
         body {
-          font-family: 'Noto Serif JP', serif;
+          font-family: 'Shippori Mincho', serif;
           background-color: #f4f1ea;
           color: #2c2c2c;
           display: flex;
@@ -199,7 +171,7 @@ app.post('/generate', async (c) => {
 
     const genAI = new GoogleGenerativeAI(c.env.GEMINI_API_KEY)
     
-    // Gemini 2.5 指定
+    // ご指定の Gemini 2.5 (エラー時はcatchブロックのフォールバックが働きます)
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" })
 
     const prompt = `
@@ -217,19 +189,30 @@ app.post('/generate', async (c) => {
       ユーザーの入力: "${reason}"
     `
 
-    const result = await model.generateContent({
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-    })
-    
-    const responseText = result.response.text();
-    const cleanJsonText = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
-    const aiResult = JSON.parse(cleanJsonText);
+    let aiResult;
+    try {
+      const result = await model.generateContent({
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+      })
+      const responseText = result.response.text();
+      const cleanJsonText = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
+      aiResult = JSON.parse(cleanJsonText);
+    } catch (aiError) {
+      // AIエラー時のフォールバック（2.5が存在しない場合など）
+      console.error(aiError);
+      aiResult = {
+        title: "緊急自動承認措置",
+        description: "現在、AIの思考回路が貴殿の怠惰への熱意に圧倒され、処理を放棄しました。これは宇宙的規模の「休め」というサインです。",
+        prescription: "何も考えず、ただ泥のように眠ること。"
+      };
+    }
 
-    // 【修正箇所】URLのハードコードをやめ、Google APIから動的にフォントを取得する
-    const fontData = await loadGoogleFont({
-      family: 'Noto Serif JP',
-      weight: 700
-    })
+    // 【修正箇所】確実なTTFファイルを取得（しっぽり明朝 Bold）
+    const fontData = await fetch('https://raw.githubusercontent.com/google/fonts/main/ofl/shipporimincho/ShipporiMincho-Bold.ttf')
+      .then((res) => {
+        if (!res.ok) throw new Error(`Font fetch failed: ${res.status} ${res.statusText}`);
+        return res.arrayBuffer();
+      })
 
     const today = new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit' })
 
@@ -242,7 +225,7 @@ app.post('/generate', async (c) => {
           height: '100%',
           backgroundColor: '#f4f1ea',
           padding: '40px',
-          fontFamily: '"Noto Serif JP"',
+          fontFamily: '"Shippori Mincho"', // フォント名変更
           position: 'relative',
           border: '8px double #5c4033',
         }}
@@ -327,7 +310,7 @@ app.post('/generate', async (c) => {
         height: 800,
         fonts: [
           {
-            name: 'Noto Serif JP',
+            name: 'Shippori Mincho', // ここも変更
             data: fontData,
             weight: 700,
             style: 'normal',
