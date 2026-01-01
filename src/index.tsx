@@ -171,7 +171,7 @@ app.post('/generate', async (c) => {
 
     const genAI = new GoogleGenerativeAI(c.env.GEMINI_API_KEY)
     
-    // ご指定の Gemini 2.5 (エラー時はcatchブロックのフォールバックが働きます)
+    // ご指定の Gemini 2.5
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" })
 
     const prompt = `
@@ -198,7 +198,7 @@ app.post('/generate', async (c) => {
       const cleanJsonText = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
       aiResult = JSON.parse(cleanJsonText);
     } catch (aiError) {
-      // AIエラー時のフォールバック（2.5が存在しない場合など）
+      // AIエラー時のフォールバック
       console.error(aiError);
       aiResult = {
         title: "緊急自動承認措置",
@@ -207,7 +207,7 @@ app.post('/generate', async (c) => {
       };
     }
 
-    // 【修正箇所】確実なTTFファイルを取得（しっぽり明朝 Bold）
+    // Shippori Mincho Bold (Raw GitHub)
     const fontData = await fetch('https://raw.githubusercontent.com/google/fonts/main/ofl/shipporimincho/ShipporiMincho-Bold.ttf')
       .then((res) => {
         if (!res.ok) throw new Error(`Font fetch failed: ${res.status} ${res.statusText}`);
@@ -224,82 +224,102 @@ app.post('/generate', async (c) => {
           width: '100%',
           height: '100%',
           backgroundColor: '#f4f1ea',
-          padding: '40px',
-          fontFamily: '"Shippori Mincho"', // フォント名変更
+          padding: '20px', // 外側のパディング
+          fontFamily: '"Shippori Mincho"',
           position: 'relative',
-          border: '8px double #5c4033',
         }}
       >
+        {/* 外枠 (doubleの代わりに2つのdivで表現) */}
         <div style={{
-          position: 'absolute',
-          top: '50%',
-          left: '50%',
-          transform: 'translate(-50%, -50%) rotate(-30deg)',
-          fontSize: '120px',
-          color: 'rgba(0,0,0,0.03)',
-          fontWeight: 'bold',
-          whiteSpace: 'nowrap',
+           display: 'flex',
+           flexDirection: 'column',
+           width: '100%',
+           height: '100%',
+           border: '4px solid #5c4033', // 外側の線
+           padding: '4px',
         }}>
-          AUTHORIZED
-        </div>
+           <div style={{
+             display: 'flex',
+             flexDirection: 'column',
+             width: '100%',
+             height: '100%',
+             border: '2px solid #5c4033', // 内側の線
+             padding: '20px',
+             position: 'relative',
+           }}>
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', borderBottom: '2px solid #333', paddingBottom: '10px', marginBottom: '30px' }}>
-          <div style={{ fontSize: '20px' }}>第 8008 号</div>
-          <div style={{ fontSize: '16px' }}>発行日: {today}</div>
-        </div>
+            <div style={{
+              position: 'absolute',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%) rotate(-30deg)',
+              fontSize: '120px',
+              color: 'rgba(0,0,0,0.03)',
+              fontWeight: 'bold',
+              whiteSpace: 'nowrap',
+            }}>
+              AUTHORIZED
+            </div>
 
-        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '30px' }}>
-          <div style={{ fontSize: '42px', fontWeight: 'bold', letterSpacing: '0.2em' }}>欠勤許可証</div>
-        </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', borderBottom: '2px solid #333', paddingBottom: '10px', marginBottom: '30px' }}>
+              <div style={{ fontSize: '20px' }}>第 8008 号</div>
+              <div style={{ fontSize: '16px' }}>発行日: {today}</div>
+            </div>
 
-        <div style={{ fontSize: '24px', marginBottom: '40px' }}>
-          申請者 殿
-        </div>
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '30px' }}>
+              <div style={{ fontSize: '42px', fontWeight: 'bold', letterSpacing: '0.2em' }}>欠勤許可証</div>
+            </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', flexGrow: 1 }}>
-          <div style={{ display: 'flex', marginBottom: '10px', fontSize: '18px', color: '#555' }}>【診断名】</div>
-          <div style={{ fontSize: '32px', fontWeight: 'bold', marginBottom: '30px', color: '#b91c1c' }}>
-            {aiResult.title}
-          </div>
+            <div style={{ fontSize: '24px', marginBottom: '40px' }}>
+              申請者 殿
+            </div>
 
-          <div style={{ display: 'flex', marginBottom: '10px', fontSize: '18px', color: '#555' }}>【認定理由】</div>
-          <div style={{ fontSize: '20px', lineHeight: '1.6', marginBottom: '30px', textAlign: 'justify' }}>
-            {aiResult.description}
-          </div>
+            <div style={{ display: 'flex', flexDirection: 'column', flexGrow: 1 }}>
+              <div style={{ display: 'flex', marginBottom: '10px', fontSize: '18px', color: '#555' }}>【診断名】</div>
+              <div style={{ fontSize: '32px', fontWeight: 'bold', marginBottom: '30px', color: '#b91c1c' }}>
+                {aiResult.title}
+              </div>
 
-          <div style={{ display: 'flex', marginBottom: '10px', fontSize: '18px', color: '#555' }}>【処方・措置】</div>
-          <div style={{ fontSize: '22px', fontWeight: 'bold' }}>
-            {aiResult.prescription}
-          </div>
-        </div>
+              <div style={{ display: 'flex', marginBottom: '10px', fontSize: '18px', color: '#555' }}>【認定理由】</div>
+              <div style={{ fontSize: '20px', lineHeight: '1.6', marginBottom: '30px', textAlign: 'justify' }}>
+                {aiResult.description}
+              </div>
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 'auto', paddingTop: '20px', position: 'relative' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-            <div style={{ fontSize: '16px', marginBottom: '5px' }}>認可機関</div>
-            <div style={{ fontSize: '20px', fontWeight: 'bold' }}>サボり許可局</div>
-          </div>
-          
-          <div style={{
-            position: 'absolute',
-            right: '-10px',
-            bottom: '-10px',
-            width: '100px',
-            height: '100px',
-            border: '4px solid #d93025',
-            borderRadius: '8px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: '#d93025',
-            fontSize: '24px',
-            fontWeight: 'bold',
-            transform: 'rotate(-15deg)',
-            opacity: 0.8,
-            boxShadow: '0 0 0 2px #d93025 inset' 
-          }}>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', lineHeight: '1' }}>
-              <span>許可</span>
-              <span style={{ fontSize: '14px', marginTop: '5px' }}>局長印</span>
+              <div style={{ display: 'flex', marginBottom: '10px', fontSize: '18px', color: '#555' }}>【処方・措置】</div>
+              <div style={{ fontSize: '22px', fontWeight: 'bold' }}>
+                {aiResult.prescription}
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 'auto', paddingTop: '20px', position: 'relative' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                <div style={{ fontSize: '16px', marginBottom: '5px' }}>認可機関</div>
+                <div style={{ fontSize: '20px', fontWeight: 'bold' }}>サボり許可局</div>
+              </div>
+              
+              <div style={{
+                position: 'absolute',
+                right: '-10px',
+                bottom: '-10px',
+                width: '100px',
+                height: '100px',
+                border: '4px solid #d93025',
+                borderRadius: '8px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#d93025',
+                fontSize: '24px',
+                fontWeight: 'bold',
+                transform: 'rotate(-15deg)',
+                opacity: 0.8,
+                boxShadow: '0 0 0 2px #d93025 inset' 
+              }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', lineHeight: '1' }}>
+                  <span>許可</span>
+                  <span style={{ fontSize: '14px', marginTop: '5px' }}>局長印</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -310,7 +330,7 @@ app.post('/generate', async (c) => {
         height: 800,
         fonts: [
           {
-            name: 'Shippori Mincho', // ここも変更
+            name: 'Shippori Mincho',
             data: fontData,
             weight: 700,
             style: 'normal',
