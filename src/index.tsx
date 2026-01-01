@@ -143,7 +143,6 @@ app.get('/', (c) => {
             img.src = url;
             resultArea.style.display = 'block';
           } catch (e) {
-            // ここで改行コードをエスケープしています
             errorLog.style.display = 'block';
             errorLog.textContent = '【エラー詳細】\\n' + e.message;
             console.error(e);
@@ -172,7 +171,7 @@ app.post('/generate', async (c) => {
 
     const genAI = new GoogleGenerativeAI(c.env.GEMINI_API_KEY)
     
-    // りゅーさんの強い希望により 2.5 を指定（エラーになる可能性大）
+    // ユーザー指定: 2.5 (実在しない場合は404エラーになる想定)
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" })
 
     const prompt = `
@@ -190,9 +189,9 @@ app.post('/generate', async (c) => {
       ユーザーの入力: "${reason}"
     `
 
+    // generationConfigを削除しました
     const result = await model.generateContent({
         contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: { responseMimeType: "application/json" }
     })
     
     const responseText = result.response.text();
