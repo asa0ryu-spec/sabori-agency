@@ -71,7 +71,6 @@ app.get('/', (c) => {
       <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <meta name="author" content="Sabo Rikyu (Hidden Layer Works)">
-      
       <title>サボり許可局 | Official Excuse Agency</title>
       <meta name="description" content="AI官僚が、あなたの怠惰を正当な休養事由として認可します。">
       
@@ -252,12 +251,12 @@ app.get('/', (c) => {
           </div>
         </div>
         
-        <div class="footer-version">System v2.1.1 (Authorized by S.Rikyu)</div>
+        <div class="footer-version">System v2.2.0 (Authorized by S.Rikyu)</div>
       </div>
 
       <script>
         // お役所感のあるローディングメッセージ
-        const loadingMessages = [
+        var loadingMessages = [
           "申請書類の不備を再確認中...",
           "関係省庁との調整を行っております...",
           "決裁ルートを確認中...",
@@ -270,18 +269,23 @@ app.get('/', (c) => {
           "窓口担当者が離席中です..."
         ];
 
-        let loadingInterval;
+        var loadingInterval;
 
         async function generateExcuse() {
-          const reason = document.getElementById('reason').value;
-          if (!reason) return alert('理由を入力してください');
+          var reasonInput = document.getElementById('reason');
+          var reason = reasonInput.value;
+          
+          if (!reason) {
+            alert('理由を入力してください');
+            return;
+          }
 
-          const btn = document.getElementById('submit-btn');
-          const loading = document.getElementById('loading');
-          const resultArea = document.getElementById('result-area');
-          const img = document.getElementById('result-img');
-          const errorLog = document.getElementById('error-log');
-          const shareLink = document.getElementById('share-link');
+          var btn = document.getElementById('submit-btn');
+          var loading = document.getElementById('loading');
+          var resultArea = document.getElementById('result-area');
+          var img = document.getElementById('result-img');
+          var errorLog = document.getElementById('error-log');
+          var shareLink = document.getElementById('share-link');
 
           btn.disabled = true;
           loading.style.display = 'block';
@@ -291,29 +295,29 @@ app.get('/', (c) => {
 
           // ランダムメッセージ開始
           loading.textContent = loadingMessages[Math.floor(Math.random() * loadingMessages.length)];
-          loadingInterval = setInterval(() => {
+          loadingInterval = setInterval(function() {
             loading.textContent = loadingMessages[Math.floor(Math.random() * loadingMessages.length)];
           }, 2000);
 
           try {
-            const response = await fetch('/generate', {
+            var response = await fetch('/generate', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ reason })
+              body: JSON.stringify({ reason: reason })
             });
 
             if (!response.ok) {
-              const errorData = await response.json();
+              var errorData = await response.json();
               throw new Error(errorData.error || 'Unknown Error');
             }
 
-            const blob = await response.blob();
-            const url = URL.createObjectURL(blob);
+            var blob = await response.blob();
+            var url = URL.createObjectURL(blob);
             img.src = url;
             
-            // 【修正箇所】テンプレートリテラルをやめ、単純な文字列結合に変更（安全策）
-            const shareText = encodeURIComponent("【サボり許可局】\\n理由：「" + reason + "」\\n\\n正式に休養が認可されました。\\n#サボり許可局\\n");
-            const shareUrl = "https://twitter.com/intent/tweet?text=" + shareText + "&url=" + encodeURIComponent("${baseUrl}");
+            // シンプルで安全な文字列結合
+            var shareText = "【サボり許可局】\\n理由：「" + reason + "」\\n\\n正式に休養が認可されました。\\n#サボり許可局\\n";
+            var shareUrl = "https://twitter.com/intent/tweet?text=" + encodeURIComponent(shareText) + "&url=" + encodeURIComponent("${baseUrl}");
             shareLink.href = shareUrl;
 
             resultArea.style.display = 'block';
@@ -329,10 +333,10 @@ app.get('/', (c) => {
         }
 
         function copyEmail(element) {
-          const email = element.textContent;
-          navigator.clipboard.writeText(email).then(() => {
+          var email = element.textContent;
+          navigator.clipboard.writeText(email).then(function() {
             alert('局長のメールアドレスをコピーしました。');
-          }).catch(err => {
+          }).catch(function(err) {
             console.error('Copy failed', err);
           });
         }
@@ -357,8 +361,10 @@ app.post('/generate', async (c) => {
     const genAI = new GoogleGenerativeAI(c.env.GEMINI_API_KEY)
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" })
 
+    // 1. 却下判定 (1/10000)
     const isRejected = Math.random() < 0.0001; 
     
+    // 2. 長さのムラ判定 (AIへの指示)
     const lengthDice = Math.random();
     let lengthInstruction = "";
     if (lengthDice < 0.2) {
@@ -371,7 +377,7 @@ app.post('/generate', async (c) => {
 
     let prompt = "";
     if (isRejected) {
-      prompt = `
+      prompt = \`
         あなたは冷徹な鬼軍曹です。
         ユーザーの「サボりたい理由」を一刀両断し、却下通知を作成しなさい。
 
@@ -382,10 +388,10 @@ app.post('/generate', async (c) => {
         4. "description": ユーザーを論破し、働く喜びを説く (80文字以内)。
         5. "prescription": 「直ちに出社せよ」等の命令 (30文字以内)。
         
-        ユーザーの入力: "${reason}"
-      `;
+        ユーザーの入力: "\${reason}"
+      \`;
     } else {
-      prompt = `
+      prompt = \`
         あなたは優秀な官僚です。
         ユーザーの「怠惰な要望」の内容に応じて、最適な許可証のタイトルを決定し、医学・物理学・歴史を用いて正当化しなさい。
         
@@ -393,11 +399,11 @@ app.post('/generate', async (c) => {
         1. 出力はJSON形式のみ: { "header", "title", "description", "prescription" }
         2. "header": 入力内容に応じた証書名（早退許可証、在宅勤務命令書、欠勤許可証、遅刻容認書など）。
         3. "title": 難解な漢字用語 (20文字以内)。
-        4. "description": ${lengthInstruction} (文量に合わせて内容を調整せよ。最大100文字程度まで許容)
+        4. "description": \${lengthInstruction} (文量に合わせて内容を調整せよ。最大100文字程度まで許容)
         5. "prescription": マイルドな提案表現にする (30文字以内)。
 
-        ユーザーの入力: "${reason}"
-      `;
+        ユーザーの入力: "\${reason}"
+      \`;
     }
 
     let aiResult;
@@ -420,7 +426,7 @@ app.post('/generate', async (c) => {
 
     const fontData = await fetch('https://raw.githubusercontent.com/google/fonts/main/ofl/shipporimincho/ShipporiMincho-Bold.ttf')
       .then((res) => {
-        if (!res.ok) throw new Error(`Font fetch failed: ${res.status} ${res.statusText}`);
+        if (!res.ok) throw new Error(\`Font fetch failed: \${res.status} \${res.statusText}\`);
         return res.arrayBuffer();
       })
 
@@ -434,6 +440,7 @@ app.post('/generate', async (c) => {
     
     const headerText = aiResult.header || (isRejected ? '却下通知書' : '欠勤許可証');
 
+    // 文字サイズ自動調整ロジック
     const titleSize = (aiResult.title && aiResult.title.length > 12) ? '24px' : '32px';
     
     let descSize = '20px';
@@ -488,8 +495,8 @@ app.post('/generate', async (c) => {
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', borderBottom: '2px solid #333', paddingBottom: '10px', marginBottom: '30px' }}>
-              <div style={{ fontSize: '20px' }}>{`第 \${issueNumber} 号`}</div>
-              <div style={{ fontSize: '16px' }}>{`発行日: \${today}`}</div>
+              <div style={{ fontSize: '20px' }}>{\`第 \${issueNumber} 号\`}</div>
+              <div style={{ fontSize: '16px' }}>{\`発行日: \${today}\`}</div>
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '20px' }}>
