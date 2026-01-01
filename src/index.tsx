@@ -8,6 +8,34 @@ type Bindings = {
 
 const app = new Hono<{ Bindings: Bindings }>()
 
+// ------------------------------------------------------------------
+// ヘルパー関数: Google Fontsからフォントデータを動的に取得する
+// ------------------------------------------------------------------
+async function loadGoogleFont({ family, weight, text }: { family: string; weight?: number; text?: string }) {
+  const params = new URLSearchParams({
+    family: `${family}${weight ? `:wght@${weight}` : ''}`,
+  })
+  if (text) params.append('text', text)
+  
+  // CSSを取得
+  const cssUrl = `https://fonts.googleapis.com/css2?${params.toString()}`
+  const css = await fetch(cssUrl, {
+    headers: {
+      // WOFF形式を返してもらうためのUser-Agent偽装
+      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Safari/537.36',
+    },
+  }).then((res) => res.text())
+
+  // CSSからフォントファイルのURLを抽出
+  const resource = css.match(/src: url\((.+?)\) format\('(opentype|truetype|woff)'\)/) || css.match(/src: url\((.+?)\)/)
+  
+  if (!resource) throw new Error('Failed to find font url in css')
+
+  // フォントファイル自体を取得
+  const res = await fetch(resource[1])
+  return res.arrayBuffer()
+}
+
 app.get('/', (c) => {
   return c.html(`
     <!DOCTYPE html>
@@ -171,7 +199,7 @@ app.post('/generate', async (c) => {
 
     const genAI = new GoogleGenerativeAI(c.env.GEMINI_API_KEY)
     
-    // ご指定の Gemini 2.5
+    // Gemini 2.5 指定
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" })
 
     const prompt = `
@@ -197,12 +225,11 @@ app.post('/generate', async (c) => {
     const cleanJsonText = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
     const aiResult = JSON.parse(cleanJsonText);
 
-    // 【修正箇所】GithubのRawドメイン（最も確実なルート）を使用
-    const fontData = await fetch('https://raw.githubusercontent.com/google/fonts/main/ofl/notoserifjp/NotoSerifJP-Bold.otf')
-      .then((res) => {
-        if (!res.ok) throw new Error(`Font fetch failed: ${res.status} ${res.statusText}`);
-        return res.arrayBuffer();
-      })
+    // 【修正箇所】URLのハードコードをやめ、Google APIから動的にフォントを取得する
+    const fontData = await loadGoogleFont({
+      family: 'Noto Serif JP',
+      weight: 700
+    })
 
     const today = new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit' })
 
