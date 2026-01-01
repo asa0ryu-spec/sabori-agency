@@ -198,7 +198,6 @@ app.post('/generate', async (c) => {
       const cleanJsonText = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
       aiResult = JSON.parse(cleanJsonText);
     } catch (aiError) {
-      // AIエラー時のフォールバック
       console.error(aiError);
       aiResult = {
         title: "緊急自動承認措置",
@@ -207,7 +206,7 @@ app.post('/generate', async (c) => {
       };
     }
 
-    // Shippori Mincho Bold (Raw GitHub)
+    // しっぽり明朝 (Shippori Mincho) - Raw GitHub (TTF)
     const fontData = await fetch('https://raw.githubusercontent.com/google/fonts/main/ofl/shipporimincho/ShipporiMincho-Bold.ttf')
       .then((res) => {
         if (!res.ok) throw new Error(`Font fetch failed: ${res.status} ${res.statusText}`);
@@ -224,7 +223,7 @@ app.post('/generate', async (c) => {
           width: '100%',
           height: '100%',
           backgroundColor: '#f4f1ea',
-          padding: '20px', // 外側のパディング
+          padding: '20px', 
           fontFamily: '"Shippori Mincho"',
           position: 'relative',
         }}
@@ -263,7 +262,8 @@ app.post('/generate', async (c) => {
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', borderBottom: '2px solid #333', paddingBottom: '10px', marginBottom: '30px' }}>
               <div style={{ fontSize: '20px' }}>第 8008 号</div>
-              <div style={{ fontSize: '16px' }}>発行日: {today}</div>
+              {/* 【修正箇所】テンプレートリテラルで1つの文字列として結合 */}
+              <div style={{ fontSize: '16px' }}>{`発行日: ${today}`}</div>
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '30px' }}>
