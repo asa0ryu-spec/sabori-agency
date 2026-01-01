@@ -252,21 +252,22 @@ app.get('/', (c) => {
           </div>
         </div>
         
-        <div class="footer-version">System v2.1.0 (Authorized by S.Rikyu)</div>
+        <div class="footer-version">System v2.1.1 (Authorized by S.Rikyu)</div>
       </div>
 
       <script>
-        // ロード中の洒落たメッセージ集
+        // お役所感のあるローディングメッセージ
         const loadingMessages = [
-          "貴殿の社会的責任を希釈中...",
-          "労働意欲の減衰係数を計算中...",
-          "上司の思考回路へハッキングを試行中...",
-          "サボりのバタフライエフェクトをシミュレーション中...",
-          "法的抜け穴を全力で検索中...",
-          "有給休暇の残存エネルギーを解析中...",
-          "宇宙の意思と接続中...",
-          "カフェイン濃度を確認中...",
-          "「仕方ない」という空気感を醸成中..."
+          "申請書類の不備を再確認中...",
+          "関係省庁との調整を行っております...",
+          "決裁ルートを確認中...",
+          "上長の承認印を待機中...",
+          "稟議書を作成中...",
+          "前例をデータベースから検索中...",
+          "法務局への照会を実行中...",
+          "定款の解釈を確認中...",
+          "公印のインクを補充中...",
+          "窓口担当者が離席中です..."
         ];
 
         let loadingInterval;
@@ -292,7 +293,7 @@ app.get('/', (c) => {
           loading.textContent = loadingMessages[Math.floor(Math.random() * loadingMessages.length)];
           loadingInterval = setInterval(() => {
             loading.textContent = loadingMessages[Math.floor(Math.random() * loadingMessages.length)];
-          }, 1500); // 1.5秒ごとに切り替え
+          }, 2000);
 
           try {
             const response = await fetch('/generate', {
@@ -310,7 +311,8 @@ app.get('/', (c) => {
             const url = URL.createObjectURL(blob);
             img.src = url;
             
-            const shareText = encodeURIComponent(\`【サボり許可局】\\n理由：「\${reason}」\\n\\n正式に休養が認可されました。\\n#サボり許可局\\n\`);
+            // 【修正箇所】テンプレートリテラルをやめ、単純な文字列結合に変更（安全策）
+            const shareText = encodeURIComponent("【サボり許可局】\\n理由：「" + reason + "」\\n\\n正式に休養が認可されました。\\n#サボり許可局\\n");
             const shareUrl = "https://twitter.com/intent/tweet?text=" + shareText + "&url=" + encodeURIComponent("${baseUrl}");
             shareLink.href = shareUrl;
 
@@ -355,16 +357,10 @@ app.post('/generate', async (c) => {
     const genAI = new GoogleGenerativeAI(c.env.GEMINI_API_KEY)
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" })
 
-    // 1. 却下判定 (1/10000)
     const isRejected = Math.random() < 0.0001; 
     
-    // 2. 長さのムラ判定 (許可の場合のみ)
-    // 0.0 - 0.2: Short (一言)
-    // 0.2 - 0.8: Normal (通常)
-    // 0.8 - 1.0: Long (長文・饒舌)
     const lengthDice = Math.random();
     let lengthInstruction = "";
-    
     if (lengthDice < 0.2) {
         lengthInstruction = "【モード：簡潔】一言で、格言のようにバッサリと言い切ること。説明は最小限に。余計な修飾語は省け。";
     } else if (lengthDice < 0.8) {
@@ -438,10 +434,8 @@ app.post('/generate', async (c) => {
     
     const headerText = aiResult.header || (isRejected ? '却下通知書' : '欠勤許可証');
 
-    // 文字サイズ自動調整ロジック (ムラっ気対応)
     const titleSize = (aiResult.title && aiResult.title.length > 12) ? '24px' : '32px';
     
-    // Descriptionのサイズ調整を強化
     let descSize = '20px';
     const descLen = aiResult.description ? aiResult.description.length : 0;
     if (descLen > 90) descSize = '15px';
