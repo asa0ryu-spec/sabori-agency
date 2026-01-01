@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { satori } from 'satori'
+import  satori  from 'satori'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 
 type Bindings = {
