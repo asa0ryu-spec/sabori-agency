@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import  satori  from 'satori'
+import satori from 'satori'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 
 type Bindings = {
@@ -156,7 +156,8 @@ app.post('/generate', async (c) => {
   }
 
   const genAI = new GoogleGenerativeAI(c.env.GEMINI_API_KEY)
-  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" })
+  // ここを確実に動作するバージョンに変更しました
+  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" })
 
   const prompt = `
     あなたは冷徹かつ優秀な官僚です。
@@ -180,6 +181,7 @@ app.post('/generate', async (c) => {
     })
     aiResult = JSON.parse(result.response.text())
   } catch (e) {
+    console.error(e) // ログにエラーを出す
     aiResult = {
       title: "原因不明のシステム障害",
       description: "現在、全宇宙的なエントロピーの増大により、貴殿の労働は物理的に不可能です。",
