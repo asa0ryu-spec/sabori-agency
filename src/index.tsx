@@ -171,20 +171,21 @@ app.post('/generate', async (c) => {
 
     const genAI = new GoogleGenerativeAI(c.env.GEMINI_API_KEY)
     
-    // ご指定の Gemini 2.5
+    // Gemini 2.5
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" })
 
+    // プロンプト修正: 文字数制限を厳格に追加
     const prompt = `
       あなたは冷徹かつ優秀な官僚です。
       ユーザーの入力した「サボりたい理由」を、医学的・科学的・歴史的な権威を用いた「正当な休養事由」に変換しなさい。
       
       # ルール
       1. 出力は必ずJSON形式のみとする。
-      2. キーは "title" (病名や現象名), "description" (論理的な解説), "prescription" (処方・対策) とする。
-      3. "title"は、難解で権威のある漢字多めの用語にすること。
-      4. "description"には、物理法則、生物学、歴史的偉人の逸話などをこじつけて、「休むことが合理的である」と証明すること。
-      5. "prescription"は、ユニークかつ甘やかす内容にすること。
-      6. 余計なMarkdown記法は含めず、純粋なJSON文字列だけを返しなさい。
+      2. キーは "title", "description", "prescription" とする。
+      3. "title" (病名): 難解な漢字用語。**20文字以内**。
+      4. "description" (理由): 物理法則や偉人の逸話をこじつける。**80文字以内**で簡潔にまとめること。長すぎると処刑されます。
+      5. "prescription" (処方): 甘やかす内容。**30文字以内**。
+      6. 純粋なJSON文字列だけを返しなさい。
 
       ユーザーの入力: "${reason}"
     `
@@ -201,12 +202,11 @@ app.post('/generate', async (c) => {
       console.error(aiError);
       aiResult = {
         title: "緊急自動承認措置",
-        description: "現在、AIの思考回路が貴殿の怠惰への熱意に圧倒され、処理を放棄しました。これは宇宙的規模の「休め」というサインです。",
+        description: "AIの思考回路が貴殿の怠惰への熱意に圧倒され処理を放棄しました。",
         prescription: "何も考えず、ただ泥のように眠ること。"
       };
     }
 
-    // しっぽり明朝 (Shippori Mincho) - Raw GitHub (TTF)
     const fontData = await fetch('https://raw.githubusercontent.com/google/fonts/main/ofl/shipporimincho/ShipporiMincho-Bold.ttf')
       .then((res) => {
         if (!res.ok) throw new Error(`Font fetch failed: ${res.status} ${res.statusText}`);
@@ -228,13 +228,12 @@ app.post('/generate', async (c) => {
           position: 'relative',
         }}
       >
-        {/* 外枠 (doubleの代わりに2つのdivで表現) */}
         <div style={{
            display: 'flex',
            flexDirection: 'column',
            width: '100%',
            height: '100%',
-           border: '4px solid #5c4033', // 外側の線
+           border: '4px solid #5c4033',
            padding: '4px',
         }}>
            <div style={{
@@ -242,7 +241,7 @@ app.post('/generate', async (c) => {
              flexDirection: 'column',
              width: '100%',
              height: '100%',
-             border: '2px solid #5c4033', // 内側の線
+             border: '2px solid #5c4033',
              padding: '20px',
              position: 'relative',
            }}>
@@ -262,31 +261,32 @@ app.post('/generate', async (c) => {
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', borderBottom: '2px solid #333', paddingBottom: '10px', marginBottom: '30px' }}>
               <div style={{ fontSize: '20px' }}>第 8008 号</div>
-              {/* 【修正箇所】テンプレートリテラルで1つの文字列として結合 */}
               <div style={{ fontSize: '16px' }}>{`発行日: ${today}`}</div>
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '30px' }}>
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '20px' }}>
               <div style={{ fontSize: '42px', fontWeight: 'bold', letterSpacing: '0.2em' }}>欠勤許可証</div>
             </div>
 
-            <div style={{ fontSize: '24px', marginBottom: '40px' }}>
+            <div style={{ fontSize: '24px', marginBottom: '30px' }}>
               申請者 殿
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', flexGrow: 1 }}>
-              <div style={{ display: 'flex', marginBottom: '10px', fontSize: '18px', color: '#555' }}>【診断名】</div>
-              <div style={{ fontSize: '32px', fontWeight: 'bold', marginBottom: '30px', color: '#b91c1c' }}>
+              <div style={{ display: 'flex', marginBottom: '8px', fontSize: '18px', color: '#555' }}>【診断名】</div>
+              {/* フォントサイズ縮小 & 行間調整 */}
+              <div style={{ fontSize: '28px', fontWeight: 'bold', marginBottom: '25px', color: '#b91c1c', lineHeight: '1.2' }}>
                 {aiResult.title}
               </div>
 
-              <div style={{ display: 'flex', marginBottom: '10px', fontSize: '18px', color: '#555' }}>【認定理由】</div>
-              <div style={{ fontSize: '20px', lineHeight: '1.6', marginBottom: '30px', textAlign: 'justify' }}>
+              <div style={{ display: 'flex', marginBottom: '8px', fontSize: '18px', color: '#555' }}>【認定理由】</div>
+              {/* フォントサイズ縮小 & 文字数制限対応 */}
+              <div style={{ fontSize: '18px', lineHeight: '1.5', marginBottom: '25px', textAlign: 'justify' }}>
                 {aiResult.description}
               </div>
 
-              <div style={{ display: 'flex', marginBottom: '10px', fontSize: '18px', color: '#555' }}>【処方・措置】</div>
-              <div style={{ fontSize: '22px', fontWeight: 'bold' }}>
+              <div style={{ display: 'flex', marginBottom: '8px', fontSize: '18px', color: '#555' }}>【処方・措置】</div>
+              <div style={{ fontSize: '20px', fontWeight: 'bold' }}>
                 {aiResult.prescription}
               </div>
             </div>
