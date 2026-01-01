@@ -85,6 +85,7 @@ app.get('/', (c) => {
           box-shadow: 0 10px 25px rgba(0,0,0,0.1);
         }
         .loading { font-size: 0.8rem; color: #888; margin-top: 10px; display: none; }
+        .error-log { color: red; font-size: 0.8rem; margin-top: 10px; text-align: left; white-space: pre-wrap; display: none;}
       </style>
     </head>
     <body>
@@ -98,6 +99,7 @@ app.get('/', (c) => {
           <br>
           <button id="submit-btn" onclick="generateExcuse()">申請を行う</button>
           <div id="loading" class="loading">論理構築中... 官僚がデータベースを検索しています...</div>
+          <div id="error-log" class="error-log"></div>
         </div>
 
         <div id="result-area">
@@ -116,10 +118,13 @@ app.get('/', (c) => {
           const loading = document.getElementById('loading');
           const resultArea = document.getElementById('result-area');
           const img = document.getElementById('result-img');
+          const errorLog = document.getElementById('error-log');
 
           btn.disabled = true;
           loading.style.display = 'block';
           resultArea.style.display = 'none';
+          errorLog.style.display = 'none';
+          errorLog.textContent = '';
 
           try {
             const response = await fetch('/generate', {
@@ -128,14 +133,19 @@ app.get('/', (c) => {
               body: JSON.stringify({ reason })
             });
 
-            if (!response.ok) throw new Error('申請却下');
+            if (!response.ok) {
+              const errorData = await response.json();
+              throw new Error(errorData.error || 'Unknown Error');
+            }
 
             const blob = await response.blob();
             const url = URL.createObjectURL(blob);
             img.src = url;
             resultArea.style.display = 'block';
           } catch (e) {
-            alert('システムエラー：役所の窓口が混み合っています。');
+            alert('エラーが発生しました。詳細は画面下の赤文字を確認してください。');
+            errorLog.style.display = 'block';
+            errorLog.textContent = '【エラー詳細】\n' + e.message;
             console.error(e);
           } finally {
             btn.disabled = false;
@@ -149,160 +159,178 @@ app.get('/', (c) => {
 })
 
 app.post('/generate', async (c) => {
-  const { reason } = await c.req.json<{ reason: string }>()
-  
-  if (!reason || reason.length > 50) {
-    return c.text('申請理由が長すぎます。簡潔に。', 400)
-  }
-
-  const genAI = new GoogleGenerativeAI(c.env.GEMINI_API_KEY)
-  // ここを確実に動作するバージョンに変更しました
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" })
-
-  const prompt = `
-    あなたは冷徹かつ優秀な官僚です。
-    ユーザーの入力した「サボりたい理由」を、医学的・科学的・歴史的な権威を用いた「正当な休養事由」に変換しなさい。
-    
-    # ルール
-    1. 出力は必ずJSON形式のみとする。
-    2. キーは "title" (病名や現象名), "description" (論理的な解説), "prescription" (処方・対策) とする。
-    3. "title"は、難解で権威のある漢字多めの用語にすること。（例：急性動機欠乏症候群、気圧性脳機能低下）
-    4. "description"には、物理法則、生物学、歴史的偉人の逸話などをこじつけて、「休むことが合理的である」と証明すること。
-    5. "prescription"は、ユニークかつ甘やかす内容にすること。
-
-    ユーザーの入力: "${reason}"
-  `
-
-  let aiResult
   try {
+    const { reason } = await c.req.json<{ reason: string }>()
+    
+    if (!reason || reason.length > 50) {
+      return c.json({ error: '申請理由が長すぎます。簡潔に。' }, 400)
+    }
+
+    // APIキーの確認（デバッグ用）
+    if (!c.env.GEMINI_API_KEY) {
+      throw new Error('GEMINI_API_KEY is missing in Secrets.');
+    }
+
+    const genAI = new GoogleGenerativeAI(c.env.GEMINI_API_KEY)
+    
+    // ----------------------------------------------------------------
+    // 【りゅーさんの指定により 2.5 を強制適用】
+    // ※ 注意: 正式名称でない場合、APIは404を返します
+    // ----------------------------------------------------------------
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" })
+
+    const prompt = `
+      あなたは冷徹かつ優秀な官僚です。
+      ユーザーの入力した「サボりたい理由」を、医学的・科学的・歴史的な権威を用いた「正当な休養事由」に変換しなさい。
+      
+      # ルール
+      1. 出力は必ずJSON形式のみとする。
+      2. キーは "title" (病名や現象名), "description" (論理的な解説), "prescription" (処方・対策) とする。
+      3. "title"は、難解で権威のある漢字多めの用語にすること。
+      4. "description"には、物理法則、生物学、歴史的偉人の逸話などをこじつけて、「休むことが合理的である」と証明すること。
+      5. "prescription"は、ユニークかつ甘やかす内容にすること。
+      6. 余計なMarkdown記法（\`\`\`jsonなど）は含めず、純粋なJSON文字列だけを返しなさい。
+
+      ユーザーの入力: "${reason}"
+    `
+
+    // AI呼び出し
     const result = await model.generateContent({
         contents: [{ role: "user", parts: [{ text: prompt }] }],
         generationConfig: { responseMimeType: "application/json" }
     })
-    aiResult = JSON.parse(result.response.text())
-  } catch (e) {
-    console.error(e) // ログにエラーを出す
-    aiResult = {
-      title: "原因不明のシステム障害",
-      description: "現在、全宇宙的なエントロピーの増大により、貴殿の労働は物理的に不可能です。",
-      prescription: "直ちに布団へ退避せよ。"
-    }
-  }
+    
+    const responseText = result.response.text();
+    // JSONパース（万が一Markdownが含まれていても除去してパースを試みる）
+    const cleanJsonText = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
+    const aiResult = JSON.parse(cleanJsonText);
 
-  const fontData = await fetch('https://github.com/google/fonts/raw/main/ofl/notoserifjp/NotoSerifJP-Bold.otf')
-    .then((res) => res.arrayBuffer())
+    // フォント取得
+    const fontData = await fetch('https://github.com/google/fonts/raw/main/ofl/notoserifjp/NotoSerifJP-Bold.otf')
+      .then((res) => {
+        if (!res.ok) throw new Error('Font fetch failed');
+        return res.arrayBuffer();
+      })
 
-  const today = new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit' })
+    const today = new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit' })
 
-  const svg = await satori(
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        width: '100%',
-        height: '100%',
-        backgroundColor: '#f4f1ea',
-        padding: '40px',
-        fontFamily: '"Noto Serif JP"',
-        position: 'relative',
-        border: '8px double #5c4033',
-      }}
-    >
-      <div style={{
-        position: 'absolute',
-        top: '50%',
-        left: '50%',
-        transform: 'translate(-50%, -50%) rotate(-30deg)',
-        fontSize: '120px',
-        color: 'rgba(0,0,0,0.03)',
-        fontWeight: 'bold',
-        whiteSpace: 'nowrap',
-      }}>
-        AUTHORIZED
-      </div>
-
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', borderBottom: '2px solid #333', paddingBottom: '10px', marginBottom: '30px' }}>
-        <div style={{ fontSize: '20px' }}>第 8008 号</div>
-        <div style={{ fontSize: '16px' }}>発行日: {today}</div>
-      </div>
-
-      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '30px' }}>
-        <div style={{ fontSize: '42px', fontWeight: 'bold', letterSpacing: '0.2em' }}>欠勤許可証</div>
-      </div>
-
-      <div style={{ fontSize: '24px', marginBottom: '40px' }}>
-        申請者 殿
-      </div>
-
-      <div style={{ display: 'flex', flexDirection: 'column', flexGrow: 1 }}>
-        <div style={{ display: 'flex', marginBottom: '10px', fontSize: '18px', color: '#555' }}>【診断名】</div>
-        <div style={{ fontSize: '32px', fontWeight: 'bold', marginBottom: '30px', color: '#b91c1c' }}>
-          {aiResult.title}
-        </div>
-
-        <div style={{ display: 'flex', marginBottom: '10px', fontSize: '18px', color: '#555' }}>【認定理由】</div>
-        <div style={{ fontSize: '20px', lineHeight: '1.6', marginBottom: '30px', textAlign: 'justify' }}>
-          {aiResult.description}
-        </div>
-
-        <div style={{ display: 'flex', marginBottom: '10px', fontSize: '18px', color: '#555' }}>【処方・措置】</div>
-        <div style={{ fontSize: '22px', fontWeight: 'bold' }}>
-          {aiResult.prescription}
-        </div>
-      </div>
-
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 'auto', paddingTop: '20px', position: 'relative' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-          <div style={{ fontSize: '16px', marginBottom: '5px' }}>認可機関</div>
-          <div style={{ fontSize: '20px', fontWeight: 'bold' }}>サボり許可局</div>
-        </div>
-        
+    const svg = await satori(
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          width: '100%',
+          height: '100%',
+          backgroundColor: '#f4f1ea',
+          padding: '40px',
+          fontFamily: '"Noto Serif JP"',
+          position: 'relative',
+          border: '8px double #5c4033',
+        }}
+      >
         <div style={{
           position: 'absolute',
-          right: '-10px',
-          bottom: '-10px',
-          width: '100px',
-          height: '100px',
-          border: '4px solid #d93025',
-          borderRadius: '8px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          color: '#d93025',
-          fontSize: '24px',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%) rotate(-30deg)',
+          fontSize: '120px',
+          color: 'rgba(0,0,0,0.03)',
           fontWeight: 'bold',
-          transform: 'rotate(-15deg)',
-          opacity: 0.8,
-          boxShadow: '0 0 0 2px #d93025 inset' 
+          whiteSpace: 'nowrap',
         }}>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', lineHeight: '1' }}>
-            <span>許可</span>
-            <span style={{ fontSize: '14px', marginTop: '5px' }}>局長印</span>
+          AUTHORIZED
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', borderBottom: '2px solid #333', paddingBottom: '10px', marginBottom: '30px' }}>
+          <div style={{ fontSize: '20px' }}>第 8008 号</div>
+          <div style={{ fontSize: '16px' }}>発行日: {today}</div>
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '30px' }}>
+          <div style={{ fontSize: '42px', fontWeight: 'bold', letterSpacing: '0.2em' }}>欠勤許可証</div>
+        </div>
+
+        <div style={{ fontSize: '24px', marginBottom: '40px' }}>
+          申請者 殿
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', flexGrow: 1 }}>
+          <div style={{ display: 'flex', marginBottom: '10px', fontSize: '18px', color: '#555' }}>【診断名】</div>
+          <div style={{ fontSize: '32px', fontWeight: 'bold', marginBottom: '30px', color: '#b91c1c' }}>
+            {aiResult.title}
+          </div>
+
+          <div style={{ display: 'flex', marginBottom: '10px', fontSize: '18px', color: '#555' }}>【認定理由】</div>
+          <div style={{ fontSize: '20px', lineHeight: '1.6', marginBottom: '30px', textAlign: 'justify' }}>
+            {aiResult.description}
+          </div>
+
+          <div style={{ display: 'flex', marginBottom: '10px', fontSize: '18px', color: '#555' }}>【処方・措置】</div>
+          <div style={{ fontSize: '22px', fontWeight: 'bold' }}>
+            {aiResult.prescription}
           </div>
         </div>
-      </div>
-      
-    </div>,
-    {
-      width: 600,
-      height: 800,
-      fonts: [
-        {
-          name: 'Noto Serif JP',
-          data: fontData,
-          weight: 700,
-          style: 'normal',
-        },
-      ],
-    }
-  )
 
-  return new Response(svg, {
-    headers: {
-      'Content-Type': 'image/svg+xml',
-      'Cache-Control': 'no-cache'
-    },
-  })
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 'auto', paddingTop: '20px', position: 'relative' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <div style={{ fontSize: '16px', marginBottom: '5px' }}>認可機関</div>
+            <div style={{ fontSize: '20px', fontWeight: 'bold' }}>サボり許可局</div>
+          </div>
+          
+          <div style={{
+            position: 'absolute',
+            right: '-10px',
+            bottom: '-10px',
+            width: '100px',
+            height: '100px',
+            border: '4px solid #d93025',
+            borderRadius: '8px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#d93025',
+            fontSize: '24px',
+            fontWeight: 'bold',
+            transform: 'rotate(-15deg)',
+            opacity: 0.8,
+            boxShadow: '0 0 0 2px #d93025 inset' 
+          }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', lineHeight: '1' }}>
+              <span>許可</span>
+              <span style={{ fontSize: '14px', marginTop: '5px' }}>局長印</span>
+            </div>
+          </div>
+        </div>
+        
+      </div>,
+      {
+        width: 600,
+        height: 800,
+        fonts: [
+          {
+            name: 'Noto Serif JP',
+            data: fontData,
+            weight: 700,
+            style: 'normal',
+          },
+        ],
+      }
+    )
+
+    return new Response(svg, {
+      headers: {
+        'Content-Type': 'image/svg+xml',
+        'Cache-Control': 'no-cache'
+      },
+    })
+
+  } catch (e: any) {
+    // 【デバッグ用】 エラー詳細をJSONで返す
+    return c.json({ 
+      error: `System Error: ${e.message}`,
+      stack: e.stack 
+    }, 500)
+  }
 })
 
 export default app
