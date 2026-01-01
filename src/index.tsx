@@ -171,7 +171,7 @@ app.post('/generate', async (c) => {
 
     const genAI = new GoogleGenerativeAI(c.env.GEMINI_API_KEY)
     
-    // ユーザー指定: 2.5 (実在しない場合は404エラーになる想定)
+    // Gemini 2.5 指定（ここまでは成功しているようです）
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" })
 
     const prompt = `
@@ -189,7 +189,6 @@ app.post('/generate', async (c) => {
       ユーザーの入力: "${reason}"
     `
 
-    // generationConfigを削除しました
     const result = await model.generateContent({
         contents: [{ role: "user", parts: [{ text: prompt }] }],
     })
@@ -198,9 +197,10 @@ app.post('/generate', async (c) => {
     const cleanJsonText = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
     const aiResult = JSON.parse(cleanJsonText);
 
-    const fontData = await fetch('https://github.com/google/fonts/raw/main/ofl/notoserifjp/NotoSerifJP-Bold.otf')
+    // 【修正箇所】GitHub直ではなく、CDN (jsDelivr) 経由でフォントを取得
+    const fontData = await fetch('https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/notoserifjp/NotoSerifJP-Bold.otf')
       .then((res) => {
-        if (!res.ok) throw new Error('Font fetch failed');
+        if (!res.ok) throw new Error(`Font fetch failed: ${res.statusText}`);
         return res.arrayBuffer();
       })
 
