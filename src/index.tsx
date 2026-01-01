@@ -8,14 +8,94 @@ type Bindings = {
 
 const app = new Hono<{ Bindings: Bindings }>()
 
+// ------------------------------------------------------------------
+// OGP画像（SNSシェア用看板）を生成するエンドポイント
+// ------------------------------------------------------------------
+app.get('/og-image', async (c) => {
+  const fontData = await fetch('https://raw.githubusercontent.com/google/fonts/main/ofl/shipporimincho/ShipporiMincho-Bold.ttf')
+    .then((res) => {
+      if (!res.ok) throw new Error(`Font fetch failed: ${res.status} ${res.statusText}`);
+      return res.arrayBuffer();
+    })
+
+  const svg = await satori(
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: '100%',
+        height: '100%',
+        backgroundColor: '#f4f1ea',
+        border: '16px solid #b91c1c',
+        fontFamily: '"Shippori Mincho"',
+      }}
+    >
+      <div style={{ display: 'flex', fontSize: '80px', fontWeight: 'bold', color: '#2c2c2c', marginBottom: '20px' }}>
+        サボり許可局
+      </div>
+      <div style={{ display: 'flex', fontSize: '40px', color: '#b91c1c' }}>
+        Official Excuse Agency
+      </div>
+      <div style={{ display: 'flex', marginTop: '40px', padding: '20px 40px', border: '4px solid #5c4033', borderRadius: '20px', fontSize: '30px', color: '#5c4033' }}>
+        あなたの怠惰を、論理的に正当化します。
+      </div>
+    </div>,
+    {
+      width: 1200,
+      height: 630,
+      fonts: [
+        {
+          name: 'Shippori Mincho',
+          data: fontData,
+          weight: 700,
+          style: 'normal',
+        },
+      ],
+    }
+  )
+
+  return new Response(svg, {
+    headers: { 'Content-Type': 'image/svg+xml' },
+  })
+})
+
+
+// ------------------------------------------------------------------
+// メインページ
+// ------------------------------------------------------------------
 app.get('/', (c) => {
+  const baseUrl = new URL(c.req.url).origin;
+  const ogImageUrl = `${baseUrl}/og-image`;
+
   return c.html(`
     <!DOCTYPE html>
     <html lang="ja">
     <head>
       <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <meta name="author" content="Sabo Rikyu (Hidden Layer Works)">
+      
+      <!-- SEO Meta Tags -->
       <title>サボり許可局 | Official Excuse Agency</title>
+      <meta name="description" content="「会社に行きたくない」「なんとなくダルい」。AI官僚がその怠惰を医学・歴史・物理学を用いて論理的に正当化し、正式な『欠勤許可証』を発行します。">
+      <meta name="keywords" content="サボり, 言い訳, AI, 生成, 診断, 欠勤, 理由, ジェネレーター">
+      
+      <!-- Open Graph / Facebook / LINE -->
+      <meta property="og:type" content="website">
+      <meta property="og:url" content="${baseUrl}">
+      <meta property="og:title" content="サボり許可局 | Official Excuse Agency">
+      <meta property="og:description" content="AI官僚が、あなたの怠惰を正当な休養事由として認可します。">
+      <meta property="og:image" content="${ogImageUrl}">
+
+      <!-- Twitter -->
+      <meta name="twitter:card" content="summary_large_image">
+      <meta name="twitter:url" content="${baseUrl}">
+      <meta name="twitter:title" content="サボり許可局 | Official Excuse Agency">
+      <meta name="twitter:description" content="AI官僚が、あなたの怠惰を正当な休養事由として認可します。">
+      <meta name="twitter:image" content="${ogImageUrl}">
+
       <style>
         @import url('https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@700&display=swap');
         body {
@@ -62,30 +142,61 @@ app.get('/', (c) => {
           margin-bottom: 1rem;
         }
         
-        button {
-          background-color: #2c2c2c;
-          color: white;
+        .btn {
           border: none;
           padding: 12px 30px;
           font-size: 1rem;
           font-family: inherit;
           cursor: pointer;
-          transition: background 0.2s;
+          transition: background 0.2s, transform 0.1s;
+          text-decoration: none;
+          display: inline-block;
+          border-radius: 4px;
+          margin: 5px;
         }
-        button:hover { background-color: #b91c1c; }
-        button:disabled { background-color: #ccc; cursor: not-allowed; }
+        .btn:active { transform: scale(0.98); }
+
+        .btn-submit {
+          background-color: #2c2c2c;
+          color: white;
+          width: 80%;
+        }
+        .btn-submit:hover { background-color: #b91c1c; }
+        .btn-submit:disabled { background-color: #ccc; cursor: not-allowed; }
+
+        .btn-share {
+          background-color: #000;
+          color: white;
+          font-size: 0.9rem;
+          padding: 10px 20px;
+        }
+        .btn-share:hover { background-color: #333; }
+
+        .bribe-link {
+          margin-top: 30px;
+          font-size: 0.8rem;
+          color: #888;
+          text-decoration: underline;
+          cursor: pointer;
+        }
+        .bribe-link:hover { color: #b91c1c; }
 
         #result-area {
           margin-top: 20px;
           display: none;
+          animation: fadeIn 0.5s ease-in-out;
         }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
         img {
           max-width: 100%;
           border: 1px solid #ccc;
           box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+          margin-bottom: 20px;
         }
         .loading { font-size: 0.8rem; color: #888; margin-top: 10px; display: none; }
         .error-log { color: red; font-size: 0.8rem; margin-top: 10px; text-align: left; white-space: pre-wrap; display: none; background: #fff0f0; padding: 10px; border: 1px solid red;}
+        .footer-version { font-size: 0.6rem; color: #ccc; margin-top: 30px; }
       </style>
     </head>
     <body>
@@ -97,7 +208,7 @@ app.get('/', (c) => {
           <p>申請理由（嘘は不要です）</p>
           <input type="text" id="reason" placeholder="例：なんとなくダルい" maxlength="50">
           <br>
-          <button id="submit-btn" onclick="generateExcuse()">申請を行う</button>
+          <button id="submit-btn" class="btn btn-submit" onclick="generateExcuse()">申請を行う</button>
           <div id="loading" class="loading">論理構築中... 官僚がデータベースを検索しています...</div>
           <div id="error-log" class="error-log"></div>
         </div>
@@ -105,8 +216,28 @@ app.get('/', (c) => {
         <div id="result-area">
           <h3>発行された許可証</h3>
           <img id="result-img" src="" alt="許可証">
-          <p style="font-size: 0.8rem; margin-top: 10px;">画像を長押し/右クリックで保存してください</p>
+          <p style="font-size: 0.8rem; color: #555;">画像を長押しで保存してください</p>
+          
+          <div style="margin-top: 20px;">
+            <a id="share-link" href="#" target="_blank" class="btn btn-share">
+              X (旧Twitter) で見せびらかす
+            </a>
+          </div>
+
+          <!-- 袖の下（マネタイズ）エリア -->
+          <div style="margin-top: 40px; border-top: 1px dashed #ccc; padding-top: 20px;">
+            <p style="font-size: 0.8rem; margin-bottom: 5px;">この許可証は有効ですか？</p>
+            
+            <!-- 【重要】GifteeのURLなどへ書き換えてください -->
+            <a href="https://giftee.com/" target="_blank" class="bribe-link">
+              局長室へ袖の下（匿名ギフト）を届ける
+            </a>
+            
+            <p style="font-size: 0.7rem; color: #aaa; margin-top: 5px;">※ 納品された物資は、局長の怠惰な生活維持に使用されます。</p>
+          </div>
         </div>
+        
+        <div class="footer-version">System v1.1.0 (Authorized by S.Rikyu)</div>
       </div>
 
       <script>
@@ -119,6 +250,7 @@ app.get('/', (c) => {
           const resultArea = document.getElementById('result-area');
           const img = document.getElementById('result-img');
           const errorLog = document.getElementById('error-log');
+          const shareLink = document.getElementById('share-link');
 
           btn.disabled = true;
           loading.style.display = 'block';
@@ -141,6 +273,11 @@ app.get('/', (c) => {
             const blob = await response.blob();
             const url = URL.createObjectURL(blob);
             img.src = url;
+            
+            const shareText = encodeURIComponent(\`【サボり許可局】\\n理由：「\${reason}」\\n\\n正式に休養が認可されました。\\n#サボり許可局\\n\`);
+            const shareUrl = "https://twitter.com/intent/tweet?text=" + shareText + "&url=" + encodeURIComponent("${baseUrl}");
+            shareLink.href = shareUrl;
+
             resultArea.style.display = 'block';
           } catch (e) {
             errorLog.style.display = 'block';
@@ -172,17 +309,10 @@ app.post('/generate', async (c) => {
     const genAI = new GoogleGenerativeAI(c.env.GEMINI_API_KEY)
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" })
 
-    // -------------------------------------------------------------
-    // 【運命のダイスロール】
-    // 1/10000 の確率で「却下 (isRejected)」フラグを立てる
-    // -------------------------------------------------------------
     const isRejected = Math.random() < 0.0001; 
-    // ※テストしたい場合はここを < 0.5 などに書き換えてデプロイしてください
 
     let prompt = "";
-
     if (isRejected) {
-      // 激レア：却下モードのプロンプト
       prompt = `
         あなたは冷徹な鬼軍曹です。
         ユーザーの「サボりたい理由」を一刀両断し、出社を命じる「却下通知」を作成しなさい。
@@ -197,7 +327,6 @@ app.post('/generate', async (c) => {
         ユーザーの入力: "${reason}"
       `;
     } else {
-      // 通常：許可モードのプロンプト（処方をマイルド化）
       prompt = `
         あなたは慈愛に満ちたカウンセラーであり、同時に優秀な官僚です。
         ユーザーの「サボりたい理由」を肯定し、「正当な休養事由」に変換しなさい。
@@ -237,15 +366,12 @@ app.post('/generate', async (c) => {
       })
 
     const today = new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit' })
-    
-    // 【こだわり①】ランダムな発行番号 (1000〜9999)
     const issueNumber = Math.floor(Math.random() * 9000) + 1000;
 
-    // デザイン定義（却下時は赤基調にする）
-    const bgColor = isRejected ? '#ffeef0' : '#f4f1ea'; // 却下なら薄い赤
-    const borderColor = isRejected ? '#8a1c1c' : '#5c4033'; // 却下なら濃い赤枠
-    const stampText = isRejected ? '却下' : '許可'; // ハンコの文字
-    const stampColor = '#d93025'; // ハンコは常に赤
+    const bgColor = isRejected ? '#ffeef0' : '#f4f1ea'; 
+    const borderColor = isRejected ? '#8a1c1c' : '#5c4033'; 
+    const stampText = isRejected ? '却下' : '許可'; 
+    const stampColor = '#d93025'; 
     const headerText = isRejected ? '欠勤申請 却下通知書' : '欠勤許可証';
 
     const svg = await satori(
@@ -266,7 +392,7 @@ app.post('/generate', async (c) => {
            flexDirection: 'column',
            width: '100%',
            height: '100%',
-           border: `4px solid ${borderColor}`,
+           border: \`4px solid \${borderColor}\`,
            padding: '4px',
         }}>
            <div style={{
@@ -274,7 +400,7 @@ app.post('/generate', async (c) => {
              flexDirection: 'column',
              width: '100%',
              height: '100%',
-             border: `2px solid ${borderColor}`,
+             border: \`2px solid \${borderColor}\`,
              padding: '20px',
              position: 'relative',
            }}>
@@ -293,8 +419,8 @@ app.post('/generate', async (c) => {
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', borderBottom: '2px solid #333', paddingBottom: '10px', marginBottom: '30px' }}>
-              <div style={{ fontSize: '20px' }}>{`第 ${issueNumber} 号`}</div>
-              <div style={{ fontSize: '16px' }}>{`発行日: ${today}`}</div>
+              <div style={{ fontSize: '20px' }}>{`第 \${issueNumber} 号`}</div>
+              <div style={{ fontSize: '16px' }}>{`発行日: \${today}`}</div>
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '20px' }}>
@@ -342,7 +468,7 @@ app.post('/generate', async (c) => {
                 bottom: '-10px',
                 width: '100px',
                 height: '100px',
-                border: `4px solid ${stampColor}`,
+                border: \`4px solid \${stampColor}\`,
                 borderRadius: '8px',
                 display: 'flex',
                 alignItems: 'center',
@@ -352,7 +478,7 @@ app.post('/generate', async (c) => {
                 fontWeight: 'bold',
                 transform: 'rotate(-15deg)',
                 opacity: 0.8,
-                boxShadow: `0 0 0 2px ${stampColor} inset` 
+                boxShadow: \`0 0 0 2px \${stampColor} inset\` 
               }}>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', lineHeight: '1' }}>
                   <span>{stampText}</span>
