@@ -85,7 +85,7 @@ app.get('/', (c) => {
           box-shadow: 0 10px 25px rgba(0,0,0,0.1);
         }
         .loading { font-size: 0.8rem; color: #888; margin-top: 10px; display: none; }
-        .error-log { color: red; font-size: 0.8rem; margin-top: 10px; text-align: left; white-space: pre-wrap; display: none;}
+        .error-log { color: red; font-size: 0.8rem; margin-top: 10px; text-align: left; white-space: pre-wrap; display: none; background: #fff0f0; padding: 10px; border: 1px solid red;}
       </style>
     </head>
     <body>
@@ -143,9 +143,9 @@ app.get('/', (c) => {
             img.src = url;
             resultArea.style.display = 'block';
           } catch (e) {
-            alert('エラーが発生しました。詳細は画面下の赤文字を確認してください。');
+            // ここで改行コードをエスケープしています
             errorLog.style.display = 'block';
-            errorLog.textContent = '【エラー詳細】\n' + e.message;
+            errorLog.textContent = '【エラー詳細】\\n' + e.message;
             console.error(e);
           } finally {
             btn.disabled = false;
@@ -166,17 +166,13 @@ app.post('/generate', async (c) => {
       return c.json({ error: '申請理由が長すぎます。簡潔に。' }, 400)
     }
 
-    // APIキーの確認（デバッグ用）
     if (!c.env.GEMINI_API_KEY) {
       throw new Error('GEMINI_API_KEY is missing in Secrets.');
     }
 
     const genAI = new GoogleGenerativeAI(c.env.GEMINI_API_KEY)
     
-    // ----------------------------------------------------------------
-    // 【りゅーさんの指定により 2.5 を強制適用】
-    // ※ 注意: 正式名称でない場合、APIは404を返します
-    // ----------------------------------------------------------------
+    // りゅーさんの強い希望により 2.5 を指定（エラーになる可能性大）
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" })
 
     const prompt = `
@@ -189,23 +185,20 @@ app.post('/generate', async (c) => {
       3. "title"は、難解で権威のある漢字多めの用語にすること。
       4. "description"には、物理法則、生物学、歴史的偉人の逸話などをこじつけて、「休むことが合理的である」と証明すること。
       5. "prescription"は、ユニークかつ甘やかす内容にすること。
-      6. 余計なMarkdown記法（\`\`\`jsonなど）は含めず、純粋なJSON文字列だけを返しなさい。
+      6. 余計なMarkdown記法は含めず、純粋なJSON文字列だけを返しなさい。
 
       ユーザーの入力: "${reason}"
     `
 
-    // AI呼び出し
     const result = await model.generateContent({
         contents: [{ role: "user", parts: [{ text: prompt }] }],
         generationConfig: { responseMimeType: "application/json" }
     })
     
     const responseText = result.response.text();
-    // JSONパース（万が一Markdownが含まれていても除去してパースを試みる）
     const cleanJsonText = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
     const aiResult = JSON.parse(cleanJsonText);
 
-    // フォント取得
     const fontData = await fetch('https://github.com/google/fonts/raw/main/ofl/notoserifjp/NotoSerifJP-Bold.otf')
       .then((res) => {
         if (!res.ok) throw new Error('Font fetch failed');
@@ -325,7 +318,6 @@ app.post('/generate', async (c) => {
     })
 
   } catch (e: any) {
-    // 【デバッグ用】 エラー詳細をJSONで返す
     return c.json({ 
       error: `System Error: ${e.message}`,
       stack: e.stack 
