@@ -251,7 +251,7 @@ app.get('/', (c) => {
             
             <div class="bribe-email-box">
               <span style="font-size: 0.7rem; color: #555;">▼ 受取人メールアドレス (タップしてコピー)</span>
-              <!-- 【最重要】ここをご自身のメアドに書き換えてください -->
+              <!-- hidden.layer.works@gmail.com -->
               <code class="bribe-email" onclick="copyEmail(this)">YOUR_EMAIL@example.com</code>
             </div>
             
