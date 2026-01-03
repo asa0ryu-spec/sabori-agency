@@ -3,21 +3,20 @@ import satori from 'satori'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 
 // -------------------------------------------------------------------------
-// 【緊急デバッグ用】設定値の直書きエリア
-// 環境変数が読み込めない場合、この値が使用されます。
+// 【再発行したトークンをここに貼ってください】
+// ※絶対にチャットには貼らないでください
 // -------------------------------------------------------------------------
 const CONF = {
-  TOKEN:  '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', // 提供されたトークン
-  USER:   'asa0ryu-spec',      // 判明しているユーザー名
-  REPO:   'sabori-agency',     // リポジトリ名
-  BRANCH: 'main',              // ブランチ
-  IMAGE:  '1767440233185.jpg'  // 画像ファイル名
+  TOKEN:  'ghp_NEW_TOKEN_HERE', // ★新しいトークンに書き換え
+  USER:   'asa0ryu-spec',
+  REPO:   'sabori-agency',
+  BRANCH: 'main',
+  IMAGE:  '1767440233185.jpg'
 };
 // -------------------------------------------------------------------------
 
 type Bindings = {
   GEMINI_API_KEY: string
-  // 以下は環境変数として設定されていることが望ましいが、今回はCONFで代用可能
   GITHUB_TOKEN: string
   GITHUB_USER: string
   GITHUB_REPO: string
@@ -28,18 +27,17 @@ type Bindings = {
 const app = new Hono<{ Bindings: Bindings }>()
 
 // -------------------------------------------------------------------------
-// 画像プロキシ
+// 画像プロキシ (ディレクトリリスティング機能付き)
 // -------------------------------------------------------------------------
 app.get('/image/:filename', async (c) => {
   const filename = c.req.param('filename');
   
-  // 環境変数を優先し、なければ直書き設定(CONF)を使用
   const user   = c.env.GITHUB_USER   || CONF.USER;
   const repo   = c.env.GITHUB_REPO   || CONF.REPO;
   const branch = c.env.GITHUB_BRANCH || CONF.BRANCH;
   const token  = c.env.GITHUB_TOKEN  || CONF.TOKEN;
 
-  // URL構築
+  // 1. まず指定されたファイルを取りに行く
   const imageUrl = `https://raw.githubusercontent.com/${user}/${repo}/${branch}/${filename}`;
   
   try {
@@ -50,45 +48,74 @@ app.get('/image/:filename', async (c) => {
       }
     });
     
-    // エラー時の詳細レポート (デバッグ用)
-    if (!response.ok) {
-      const errorText = await response.text();
-      // トークンの一部を伏せ字にして表示
-      const safeToken = token ? `${token.substring(0, 4)}...${token.substring(token.length - 4)}` : 'NONE';
-      
-      const report = [
-        "========== DEBUG INFO ==========",
-        `Fetch Failed (Status: ${response.status})`,
-        "",
-        "[Target URL]",
-        imageUrl,
-        "",
-        "[Config Used]",
-        `User: ${user}`,
-        `Repo: ${repo}`,
-        `Branch: ${branch}`,
-        `Token: ${safeToken}`,
-        "",
-        "[GitHub Response]",
-        errorText,
-        "================================"
-      ].join("\n");
-
-      return c.text(report, 404);
+    // 2. 成功したら画像を返す
+    if (response.ok) {
+      return new Response(response.body, {
+        headers: { 'Content-Type': 'image/jpeg', 'Cache-Control': 'public, max-age=86400' }
+      });
     }
-    
-    return new Response(response.body, {
+
+    // 3. 失敗した場合、リポジトリのファイル一覧を見に行く (デバッグ)
+    // GitHub API: GET /repos/{owner}/{repo}/contents
+    const listUrl = `https://api.github.com/repos/${user}/${repo}/contents?ref=${branch}`;
+    const listResponse = await fetch(listUrl, {
       headers: {
-        'Content-Type': 'image/jpeg',
-        'Cache-Control': 'public, max-age=86400'
+        'Authorization': `token ${token}`,
+        'User-Agent': 'Cloudflare-Workers',
+        'Accept': 'application/vnd.github.v3+json'
       }
     });
+
+    let debugInfo = "";
+    
+    if (listResponse.ok) {
+      const files = await listResponse.json() as any[];
+      const fileList = files.map(f => `- ${f.name} (${f.type})`).join("\n");
+      debugInfo = `
+[Repository Contents Check]
+Successfully accessed repository.
+Files found in root:
+${fileList}
+
+--------------------------------
+Target File: ${filename}
+Is Target in List?: ${files.some(f => f.name === filename) ? "YES" : "NO"}
+`;
+    } else {
+      const err = await listResponse.text();
+      debugInfo = `
+[Repository Access Failed]
+Could not list files.
+Status: ${listResponse.status}
+Response: ${err}
+
+Possible Causes:
+1. Token is invalid or revoked.
+2. Repo name is wrong.
+`;
+    }
+
+    // デバッグレポート表示
+    return c.text(`
+========== DEBUG REPORT ==========
+Image Fetch Failed (404)
+
+[Config Used]
+User: ${user}
+Repo: ${repo}
+Branch: ${branch}
+Token: ${token ? 'Set (Length: ' + token.length + ')' : 'MISSING'}
+
+${debugInfo}
+================================
+    `, 404);
 
   } catch (e: any) {
     return c.text(`System Error: ${e.message}`, 500);
   }
 })
 
+// ... (以下、OGP生成とメイン画面のコードは変更なし。そのまま貼り付け)
 // -------------------------------------------------------------------------
 // OGP画像生成 (動的)
 // -------------------------------------------------------------------------
@@ -142,15 +169,12 @@ app.get('/og-image', async (c) => {
   })
 })
 
-// -------------------------------------------------------------------------
-// メイン画面
-// -------------------------------------------------------------------------
 app.get('/', (c) => {
   const baseUrl = new URL(c.req.url).origin;
   
-  // プロキシ経由の画像URL (環境変数または定数を使用)
-  const imageFile = c.env.IMAGE_FILENAME || CONF.IMAGE;
-  const ogImageUrl = `${baseUrl}/image/${imageFile}`;
+  // 画像プロキシURL (CONF or Env)
+  const imgName = c.env.IMAGE_FILENAME || CONF.IMAGE;
+  const ogImageUrl = `${baseUrl}/image/${imgName}`;
 
   return c.html(`
     <!DOCTYPE html>
@@ -391,7 +415,7 @@ app.get('/', (c) => {
         
         <div class="footer">
           <a onclick="openModal()">利用規約・プライバシーポリシー</a><br><br>
-          System v2.8.0 (Final)
+          System v2.8.1 (Debug)
         </div>
       </div>
 
