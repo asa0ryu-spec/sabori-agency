@@ -2,18 +2,6 @@ import { Hono } from 'hono'
 import satori from 'satori'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 
-// -------------------------------------------------------------------------
-// 【緊急デバッグ用】設定値の直書きエリア
-// -------------------------------------------------------------------------
-const CONF = {
-  TOKEN:  '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', 
-  USER:   'asa0ryu-spec',
-  REPO:   'sabori-agency',
-  BRANCH: 'main',
-  IMAGE:  '1767440233185.jpg'
-};
-// -------------------------------------------------------------------------
-
 type Bindings = {
   GEMINI_API_KEY: string
   GITHUB_TOKEN: string
@@ -26,90 +14,49 @@ type Bindings = {
 const app = new Hono<{ Bindings: Bindings }>()
 
 // -------------------------------------------------------------------------
-// 画像プロキシ (ファイル一覧取得機能付き)
+// 画像プロキシ
 // -------------------------------------------------------------------------
 app.get('/image/:filename', async (c) => {
   const filename = c.req.param('filename');
   
-  const user   = CONF.USER;
-  const repo   = CONF.REPO;
-  const branch = CONF.BRANCH;
-  const token  = CONF.TOKEN;
+  // 環境変数のチェック
+  if (!c.env.GITHUB_TOKEN || !c.env.GITHUB_USER) {
+    return c.text('Error: Environment variables are not set in Cloudflare.', 500);
+  }
 
-  // 1. 指定ファイルを取得試行
-  const imageUrl = `https://raw.githubusercontent.com/${user}/${repo}/${branch}/${filename}`;
+  // URL構築
+  const imageUrl = `https://raw.githubusercontent.com/${c.env.GITHUB_USER}/${c.env.GITHUB_REPO}/${c.env.GITHUB_BRANCH}/${filename}`;
   
   try {
     const response = await fetch(imageUrl, {
       headers: {
-        'Authorization': `token ${token}`,
+        'Authorization': `token ${c.env.GITHUB_TOKEN}`,
         'User-Agent': 'Cloudflare-Workers'
       }
     });
     
-    // 2. 成功なら画像を返す
-    if (response.ok) {
-      return new Response(response.body, {
-        headers: {
-          'Content-Type': 'image/jpeg',
-          'Cache-Control': 'public, max-age=86400'
-        }
-      });
+    if (!response.ok) {
+      // エラー時はデバッグ情報を表示
+      const errorText = await response.text();
+      // トークンの一部だけ表示して確認（全表示はしない）
+      const tokenPreview = c.env.GITHUB_TOKEN.substring(0, 4) + '...';
+      
+      return c.text(`
+========== DEBUG INFO ==========
+Fetch Failed (Status: ${response.status})
+Target: ${imageUrl}
+Token: ${tokenPreview} (Length: ${c.env.GITHUB_TOKEN.length})
+Response: ${errorText}
+================================
+      `, 404);
     }
-
-    // 3. 失敗時：リポジトリのルートにあるファイル一覧を取得する (犯人探し)
-    let debugInfo = "";
-    const listUrl = `https://api.github.com/repos/${user}/${repo}/contents?ref=${branch}`;
     
-    const listResponse = await fetch(listUrl, {
+    return new Response(response.body, {
       headers: {
-        'Authorization': `token ${token}`,
-        'User-Agent': 'Cloudflare-Workers',
-        'Accept': 'application/vnd.github.v3+json'
+        'Content-Type': 'image/jpeg',
+        'Cache-Control': 'public, max-age=86400'
       }
     });
-
-    if (listResponse.ok) {
-      const files = await listResponse.json() as any[];
-      // ファイル名の一覧を作成
-      const names = files.map(f => `- ${f.name} (${f.type})`).join("\n");
-      
-      debugInfo = `
-[SUCCESS: Accessed Repository Root]
-Files found in '${branch}' branch:
-----------------------------------
-${names}
-----------------------------------
-Target File: "${filename}"
-Is Target in List?: ${files.some(f => f.name === filename) ? "YES" : "NO"}
-`;
-    } else {
-      const errText = await listResponse.text();
-      debugInfo = `
-[FAILED: Could not list files]
-Status: ${listResponse.status}
-Response: ${errText}
-Hint: If 404, Repo name or Branch name might be wrong.
-`;
-    }
-
-    // 4. レポート出力
-    return c.text(`
-========== DEBUG REPORT ==========
-Image Fetch Failed (Status: ${response.status})
-
-[Config Used]
-User: ${user}
-Repo: ${repo}
-Branch: ${branch}
-Token: ${token.substring(0, 4)}... (Length: ${token.length})
-
-[Target URL]
-${imageUrl}
-
-${debugInfo}
-================================
-    `, 404);
 
   } catch (e: any) {
     return c.text(`System Error: ${e.message}`, 500);
@@ -117,7 +64,7 @@ ${debugInfo}
 })
 
 // -------------------------------------------------------------------------
-// OGP画像生成 (動的)
+// OGP画像生成
 // -------------------------------------------------------------------------
 app.get('/og-image', async (c) => {
   const fontData = await fetch('https://raw.githubusercontent.com/google/fonts/main/ofl/shipporimincho/ShipporiMincho-Bold.ttf')
@@ -176,8 +123,10 @@ app.get('/', (c) => {
   const baseUrl = new URL(c.req.url).origin;
   
   // プロキシ経由の画像URL (環境変数 IMAGE_FILENAME を使用)
-  const imageFile = CONF.IMAGE;
-  const ogImageUrl = `${baseUrl}/image/${imageFile}`;
+  const imageFile = c.env.IMAGE_FILENAME || '1767440233185.jpg';
+  const ogImageUrl = c.env.IMAGE_FILENAME 
+    ? `${baseUrl}/image/${imageFile}`
+    : `${baseUrl}/og-image`;
 
   return c.html(`
     <!DOCTYPE html>
@@ -418,7 +367,7 @@ app.get('/', (c) => {
         
         <div class="footer">
           <a onclick="openModal()">利用規約・プライバシーポリシー</a><br><br>
-          System v2.9.1 (Debug)
+          System v2.9.2 (Stable)
         </div>
       </div>
 
@@ -563,10 +512,8 @@ app.post('/generate', async (c) => {
     const genAI = new GoogleGenerativeAI(c.env.GEMINI_API_KEY)
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" })
 
-    // 1. 却下判定 (1/10000)
     const isRejected = Math.random() < 0.0001; 
     
-    // 2. 長さのムラ判定
     const lengthDice = Math.random();
     let lengthInstruction = "";
     if (lengthDice < 0.2) {
@@ -626,7 +573,6 @@ app.post('/generate', async (c) => {
       };
     }
 
-    // GASへログ送信 (waitUntil)
     const gasUrl = "https://script.google.com/macros/s/AKfycbwxn5cTUHGQ4wUM53-rlgH-IzQldSMYxKiA82gHJ77gaEeMypXc9VU1Ehe2A7A7QXVr/exec";
     c.executionCtx.waitUntil(
       fetch(gasUrl, {
@@ -651,7 +597,7 @@ app.post('/generate', async (c) => {
     const issueNumber = Math.floor(Math.random() * 9000) + 1000;
 
     const bgColor = isRejected ? '#ffeef0' : '#f4f1ea'; 
-    const borderColor = isRejected ? '#8a1c1c' : '#5c4033'; 
+        const borderColor = isRejected ? '#8a1c1c' : '#5c4033'; 
     const stampText = isRejected ? '却下' : '許可'; 
     const stampColor = '#d93025'; 
     
@@ -812,3 +758,4 @@ app.post('/generate', async (c) => {
 })
 
 export default app
+  
