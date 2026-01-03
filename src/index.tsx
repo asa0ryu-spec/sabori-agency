@@ -16,20 +16,21 @@ type Bindings = {
 const app = new Hono<{ Bindings: Bindings }>()
 
 // -------------------------------------------------------------------------
-// 画像プロキシ (GitHub Privateリポジトリ対応)
+// 画像プロキシ (デバッグ機能付き)
 // -------------------------------------------------------------------------
 app.get('/image/:filename', async (c) => {
   const filename = c.req.param('filename');
   
-  // 環境変数から情報を取得してURLを構築
-  // もし環境変数が設定されていなければエラーにする防御策
-  if (!c.env.GITHUB_USER || !c.env.GITHUB_REPO) {
-    return c.text('Server Configuration Error: GitHub Variables missing', 500);
+  // 1. 環境変数のチェック
+  if (!c.env.GITHUB_USER || !c.env.GITHUB_REPO || !c.env.GITHUB_BRANCH) {
+    return c.text('Error: GitHub Environment variables are missing.', 500);
   }
 
+  // 2. URLの構築
   const imageUrl = `https://raw.githubusercontent.com/${c.env.GITHUB_USER}/${c.env.GITHUB_REPO}/${c.env.GITHUB_BRANCH}/${filename}`;
   
   try {
+    // 3. Fetch実行
     const response = await fetch(imageUrl, {
       headers: {
         'Authorization': `token ${c.env.GITHUB_TOKEN}`,
@@ -37,29 +38,39 @@ app.get('/image/:filename', async (c) => {
       }
     });
     
+    // 4. エラー時の詳細レポート (ここが重要)
     if (!response.ok) {
-      console.error(`GitHub Fetch Error: ${response.status} for ${imageUrl}`);
-      return c.text('Image not found in GitHub', 404);
+      const errorText = await response.text(); // GitHubからのエラーメッセージを読む
+      return c.text(`
+========== DEBUG INFO ==========
+Fetch Failed (Status: ${response.status})
+
+[Target URL]
+${imageUrl}
+
+[Config Check]
+User: ${c.env.GITHUB_USER}
+Repo: ${c.env.GITHUB_REPO}
+Branch: ${c.env.GITHUB_BRANCH}
+Token: ${c.env.GITHUB_TOKEN ? 'Set (Hidden)' : 'MISSING!'}
+
+[GitHub Response]
+${errorText}
+================================
+      `, 404);
     }
     
+    // 5. 成功時は画像を返す
     return new Response(response.body, {
       headers: {
         'Content-Type': 'image/jpeg',
         'Cache-Control': 'public, max-age=86400'
       }
     });
-  } catch (e) {
-    return c.text('Internal Server Error while fetching image', 500);
+  } catch (e: any) {
+    return c.text(`System Error: ${e.message}`, 500);
   }
 })
-
-// OGP画像生成 (動的)
-app.get('/og-image', async (c) => {
-  const fontData = await fetch('https://raw.githubusercontent.com/google/fonts/main/ofl/shipporimincho/ShipporiMincho-Bold.ttf')
-    .then((res) => {
-      if (!res.ok) throw new Error(`Font fetch failed: ${res.status} ${res.statusText}`);
-      return res.arrayBuffer();
-    })
 
   const svg = await satori(
     <div
