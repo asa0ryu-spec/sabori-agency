@@ -6,7 +6,6 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 type Bindings = {
   GEMINI_API_KEY: string
   GITHUB_TOKEN: string
-  // 以下、追加した環境変数
   GITHUB_USER: string
   GITHUB_REPO: string
   GITHUB_BRANCH: string
@@ -21,16 +20,17 @@ const app = new Hono<{ Bindings: Bindings }>()
 app.get('/image/:filename', async (c) => {
   const filename = c.req.param('filename');
   
-  // 1. 環境変数のチェック
+  // 1. 環境変数の存在チェック
+  // これがないとURLが組み立てられません
   if (!c.env.GITHUB_USER || !c.env.GITHUB_REPO || !c.env.GITHUB_BRANCH) {
-    return c.text('Error: GitHub Environment variables are missing.', 500);
+    return c.text('Error: GitHub Environment variables (USER, REPO, BRANCH) are missing in Cloudflare Settings.', 500);
   }
 
-  // 2. URLの構築
+  // 2. GitHub Raw URLの構築
   const imageUrl = `https://raw.githubusercontent.com/${c.env.GITHUB_USER}/${c.env.GITHUB_REPO}/${c.env.GITHUB_BRANCH}/${filename}`;
   
   try {
-    // 3. Fetch実行
+    // 3. GitHubへ取りに行く
     const response = await fetch(imageUrl, {
       headers: {
         'Authorization': `token ${c.env.GITHUB_TOKEN}`,
@@ -38,39 +38,53 @@ app.get('/image/:filename', async (c) => {
       }
     });
     
-    // 4. エラー時の詳細レポート (ここが重要)
+    // 4. 失敗した場合、詳細なレポートを表示 (デバッグ用)
     if (!response.ok) {
-      const errorText = await response.text(); // GitHubからのエラーメッセージを読む
-      return c.text(`
-========== DEBUG INFO ==========
-Fetch Failed (Status: ${response.status})
+      const errorText = await response.text(); 
+      // 診断レポートの作成
+      const report = [
+        "========== DEBUG INFO ==========",
+        `Fetch Failed (Status: ${response.status})`,
+        "",
+        "[Target URL]",
+        imageUrl,
+        "",
+        "[Config Check]",
+        `User: ${c.env.GITHUB_USER}`,
+        `Repo: ${c.env.GITHUB_REPO}`,
+        `Branch: ${c.env.GITHUB_BRANCH}`,
+        `Token: ${c.env.GITHUB_TOKEN ? 'Set (Hidden)' : 'MISSING!'}`,
+        "",
+        "[GitHub Response]",
+        errorText,
+        "================================"
+      ].join("\n");
 
-[Target URL]
-${imageUrl}
-
-[Config Check]
-User: ${c.env.GITHUB_USER}
-Repo: ${c.env.GITHUB_REPO}
-Branch: ${c.env.GITHUB_BRANCH}
-Token: ${c.env.GITHUB_TOKEN ? 'Set (Hidden)' : 'MISSING!'}
-
-[GitHub Response]
-${errorText}
-================================
-      `, 404);
+      return c.text(report, 404);
     }
     
-    // 5. 成功時は画像を返す
+    // 5. 成功した場合、画像をそのまま流す
     return new Response(response.body, {
       headers: {
         'Content-Type': 'image/jpeg',
         'Cache-Control': 'public, max-age=86400'
       }
     });
+
   } catch (e: any) {
     return c.text(`System Error: ${e.message}`, 500);
   }
 })
+
+// -------------------------------------------------------------------------
+// OGP画像生成 (動的)
+// -------------------------------------------------------------------------
+app.get('/og-image', async (c) => {
+  const fontData = await fetch('https://raw.githubusercontent.com/google/fonts/main/ofl/shipporimincho/ShipporiMincho-Bold.ttf')
+    .then((res) => {
+      if (!res.ok) throw new Error(`Font fetch failed: ${res.status} ${res.statusText}`);
+      return res.arrayBuffer();
+    })
 
   const svg = await satori(
     <div
@@ -115,12 +129,13 @@ ${errorText}
   })
 })
 
+// -------------------------------------------------------------------------
 // メイン画面
+// -------------------------------------------------------------------------
 app.get('/', (c) => {
   const baseUrl = new URL(c.req.url).origin;
   
   // プロキシ経由の画像URL (環境変数 IMAGE_FILENAME を使用)
-  // 変数がなければ動的OGPにフォールバック
   const imageFile = c.env.IMAGE_FILENAME || '1767440233185.jpg';
   const ogImageUrl = c.env.IMAGE_FILENAME 
     ? `${baseUrl}/image/${imageFile}`
@@ -365,7 +380,7 @@ app.get('/', (c) => {
         
         <div class="footer">
           <a onclick="openModal()">利用規約・プライバシーポリシー</a><br><br>
-          System v2.6.0 (Authorized by S.Rikyu)
+          System v2.6.1 (Authorized by S.Rikyu)
         </div>
       </div>
 
@@ -495,6 +510,9 @@ app.get('/', (c) => {
   `)
 })
 
+// -------------------------------------------------------------------------
+// POST /generate (AI + GAS Log)
+// -------------------------------------------------------------------------
 app.post('/generate', async (c) => {
   try {
     const { reason } = await c.req.json<{ reason: string }>()
@@ -510,8 +528,10 @@ app.post('/generate', async (c) => {
     const genAI = new GoogleGenerativeAI(c.env.GEMINI_API_KEY)
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" })
 
+    // 1. 却下判定 (1/10000)
     const isRejected = Math.random() < 0.0001; 
     
+    // 2. 長さのムラ判定
     const lengthDice = Math.random();
     let lengthInstruction = "";
     if (lengthDice < 0.2) {
