@@ -2,11 +2,50 @@ import { Hono } from 'hono'
 import satori from 'satori'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 
+// -------------------------------------------------------------------------
+// 【設定】GitHubのリポジトリ情報（ここを書き換えてください）
+// -------------------------------------------------------------------------
+const GITHUB_USER = 'YOUR_GITHUB_USERNAME'; // 例: ryu-dev
+const GITHUB_REPO = 'sabori-agency';        // リポジトリ名
+const GITHUB_BRANCH = 'main';               // ブランチ名 (main または master)
+const IMAGE_FILENAME = '1767440233185.jpg'; // アップロードした画像ファイル名
+// -------------------------------------------------------------------------
+
 type Bindings = {
   GEMINI_API_KEY: string
+  GITHUB_TOKEN: string // 追加: GitHub通行手形
 }
 
 const app = new Hono<{ Bindings: Bindings }>()
+
+// -------------------------------------------------------------------------
+// 画像プロキシ (GitHub Privateリポジトリ対応)
+// -------------------------------------------------------------------------
+app.get('/image/:filename', async (c) => {
+  const filename = c.req.param('filename');
+  
+  // GitHub APIを使ってRawデータを取得するためのURL
+  // Privateリポジトリの場合、raw.githubusercontent.com に直接アクセスするにはTokenが必要
+  const imageUrl = `https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/${GITHUB_BRANCH}/${filename}`;
+  
+  const response = await fetch(imageUrl, {
+    headers: {
+      'Authorization': `token ${c.env.GITHUB_TOKEN}`, // ここで手形を提示
+      'User-Agent': 'Cloudflare-Workers' // GitHub APIはUser-Agentが必須
+    }
+  });
+  
+  if (!response.ok) {
+    return c.text('Image not found in GitHub', 404);
+  }
+  
+  return new Response(response.body, {
+    headers: {
+      'Content-Type': 'image/jpeg', // JPEGと仮定
+      'Cache-Control': 'public, max-age=86400' // 1日キャッシュ
+    }
+  });
+})
 
 // OGP画像生成
 app.get('/og-image', async (c) => {
@@ -62,7 +101,9 @@ app.get('/og-image', async (c) => {
 // メイン画面
 app.get('/', (c) => {
   const baseUrl = new URL(c.req.url).origin;
-  const ogImageUrl = `${baseUrl}/og-image`;
+  
+  // ★ プロキシ経由の画像URLを指定
+  const ogImageUrl = `${baseUrl}/image/${IMAGE_FILENAME}`;
 
   return c.html(`
     <!DOCTYPE html>
@@ -245,7 +286,7 @@ app.get('/', (c) => {
           border-radius: 8px;
           box-shadow: 0 4px 8px rgba(0,0,0,0.2);
           text-align: left;
-          font-family: sans-serif; /* 規約は読みやすくゴシックで */
+          font-family: sans-serif;
         }
         .modal h2 { font-size: 1.2rem; border-bottom: 1px solid #ccc; padding-bottom: 10px; margin-top: 0; }
         .modal h3 { font-size: 1rem; margin-top: 20px; color: #333; }
@@ -303,7 +344,7 @@ app.get('/', (c) => {
         
         <div class="footer">
           <a onclick="openModal()">利用規約・プライバシーポリシー</a><br><br>
-          System v2.3.0 (Authorized by S.Rikyu)
+          System v2.5.0 (Authorized by S.Rikyu)
         </div>
       </div>
 
@@ -416,7 +457,6 @@ app.get('/', (c) => {
           });
         }
 
-        // モーダル操作
         function openModal() {
           document.getElementById('termsModal').style.display = 'block';
         }
@@ -510,8 +550,8 @@ app.post('/generate', async (c) => {
       };
     }
 
+    // GASへログ送信 (waitUntil)
     const gasUrl = "https://script.google.com/macros/s/AKfycbwxn5cTUHGQ4wUM53-rlgH-IzQldSMYxKiA82gHJ77gaEeMypXc9VU1Ehe2A7A7QXVr/exec";
-    
     c.executionCtx.waitUntil(
       fetch(gasUrl, {
         method: 'POST',
