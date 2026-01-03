@@ -3,7 +3,7 @@ import satori from 'satori'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 
 // -------------------------------------------------------------------------
-// 【再発行したトークンをここに貼ってください】
+// 【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】
 // ※絶対にチャットには貼らないでください
 // -------------------------------------------------------------------------
 const CONF = {
