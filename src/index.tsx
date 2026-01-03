@@ -2,9 +2,22 @@ import { Hono } from 'hono'
 import satori from 'satori'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 
-// 環境変数の型定義
+// -------------------------------------------------------------------------
+// 【緊急デバッグ用】設定値の直書きエリア
+// 環境変数が読み込めない場合、この値が使用されます。
+// -------------------------------------------------------------------------
+const CONF = {
+  TOKEN:  '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', // 提供されたトークン
+  USER:   'asa0ryu-spec',      // 判明しているユーザー名
+  REPO:   'sabori-agency',     // リポジトリ名
+  BRANCH: 'main',              // ブランチ
+  IMAGE:  '1767440233185.jpg'  // 画像ファイル名
+};
+// -------------------------------------------------------------------------
+
 type Bindings = {
   GEMINI_API_KEY: string
+  // 以下は環境変数として設定されていることが望ましいが、今回はCONFで代用可能
   GITHUB_TOKEN: string
   GITHUB_USER: string
   GITHUB_REPO: string
@@ -15,33 +28,34 @@ type Bindings = {
 const app = new Hono<{ Bindings: Bindings }>()
 
 // -------------------------------------------------------------------------
-// 画像プロキシ (デバッグ機能付き)
+// 画像プロキシ
 // -------------------------------------------------------------------------
 app.get('/image/:filename', async (c) => {
   const filename = c.req.param('filename');
   
-  // 1. 環境変数の存在チェック
-  // これがないとURLが組み立てられません
-  if (!c.env.GITHUB_USER || !c.env.GITHUB_REPO || !c.env.GITHUB_BRANCH) {
-    return c.text('Error: GitHub Environment variables (USER, REPO, BRANCH) are missing in Cloudflare Settings.', 500);
-  }
+  // 環境変数を優先し、なければ直書き設定(CONF)を使用
+  const user   = c.env.GITHUB_USER   || CONF.USER;
+  const repo   = c.env.GITHUB_REPO   || CONF.REPO;
+  const branch = c.env.GITHUB_BRANCH || CONF.BRANCH;
+  const token  = c.env.GITHUB_TOKEN  || CONF.TOKEN;
 
-  // 2. GitHub Raw URLの構築
-  const imageUrl = `https://raw.githubusercontent.com/${c.env.GITHUB_USER}/${c.env.GITHUB_REPO}/${c.env.GITHUB_BRANCH}/${filename}`;
+  // URL構築
+  const imageUrl = `https://raw.githubusercontent.com/${user}/${repo}/${branch}/${filename}`;
   
   try {
-    // 3. GitHubへ取りに行く
     const response = await fetch(imageUrl, {
       headers: {
-        'Authorization': `token ${c.env.GITHUB_TOKEN}`,
+        'Authorization': `token ${token}`,
         'User-Agent': 'Cloudflare-Workers'
       }
     });
     
-    // 4. 失敗した場合、詳細なレポートを表示 (デバッグ用)
+    // エラー時の詳細レポート (デバッグ用)
     if (!response.ok) {
-      const errorText = await response.text(); 
-      // 診断レポートの作成
+      const errorText = await response.text();
+      // トークンの一部を伏せ字にして表示
+      const safeToken = token ? `${token.substring(0, 4)}...${token.substring(token.length - 4)}` : 'NONE';
+      
       const report = [
         "========== DEBUG INFO ==========",
         `Fetch Failed (Status: ${response.status})`,
@@ -49,11 +63,11 @@ app.get('/image/:filename', async (c) => {
         "[Target URL]",
         imageUrl,
         "",
-        "[Config Check]",
-        `User: ${c.env.GITHUB_USER}`,
-        `Repo: ${c.env.GITHUB_REPO}`,
-        `Branch: ${c.env.GITHUB_BRANCH}`,
-        `Token: ${c.env.GITHUB_TOKEN ? 'Set (Hidden)' : 'MISSING!'}`,
+        "[Config Used]",
+        `User: ${user}`,
+        `Repo: ${repo}`,
+        `Branch: ${branch}`,
+        `Token: ${safeToken}`,
         "",
         "[GitHub Response]",
         errorText,
@@ -63,7 +77,6 @@ app.get('/image/:filename', async (c) => {
       return c.text(report, 404);
     }
     
-    // 5. 成功した場合、画像をそのまま流す
     return new Response(response.body, {
       headers: {
         'Content-Type': 'image/jpeg',
@@ -135,11 +148,9 @@ app.get('/og-image', async (c) => {
 app.get('/', (c) => {
   const baseUrl = new URL(c.req.url).origin;
   
-  // プロキシ経由の画像URL (環境変数 IMAGE_FILENAME を使用)
-  const imageFile = c.env.IMAGE_FILENAME || '1767440233185.jpg';
-  const ogImageUrl = c.env.IMAGE_FILENAME 
-    ? `${baseUrl}/image/${imageFile}`
-    : `${baseUrl}/og-image`;
+  // プロキシ経由の画像URL (環境変数または定数を使用)
+  const imageFile = c.env.IMAGE_FILENAME || CONF.IMAGE;
+  const ogImageUrl = `${baseUrl}/image/${imageFile}`;
 
   return c.html(`
     <!DOCTYPE html>
@@ -380,7 +391,7 @@ app.get('/', (c) => {
         
         <div class="footer">
           <a onclick="openModal()">利用規約・プライバシーポリシー</a><br><br>
-          System v2.6.1 (Authorized by S.Rikyu)
+          System v2.8.0 (Final)
         </div>
       </div>
 
@@ -510,9 +521,6 @@ app.get('/', (c) => {
   `)
 })
 
-// -------------------------------------------------------------------------
-// POST /generate (AI + GAS Log)
-// -------------------------------------------------------------------------
 app.post('/generate', async (c) => {
   try {
     const { reason } = await c.req.json<{ reason: string }>()
@@ -777,4 +785,3 @@ app.post('/generate', async (c) => {
 })
 
 export default app
-
