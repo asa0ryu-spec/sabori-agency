@@ -6,7 +6,6 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 // 【緊急デバッグ用】設定値の直書きエリア
 // -------------------------------------------------------------------------
 const CONF = {
-  // ★ここに貼り付けたトークンを強制的に使います
   TOKEN:  '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', 
   USER:   'asa0ryu-spec',
   REPO:   'sabori-agency',
@@ -27,7 +26,7 @@ type Bindings = {
 const app = new Hono<{ Bindings: Bindings }>()
 
 // -------------------------------------------------------------------------
-// 画像プロキシ (直書きトークン強制使用)
+// 画像プロキシ (ファイル一覧取得機能付き)
 // -------------------------------------------------------------------------
 app.get('/image/:filename', async (c) => {
   const filename = c.req.param('filename');
@@ -35,9 +34,9 @@ app.get('/image/:filename', async (c) => {
   const user   = CONF.USER;
   const repo   = CONF.REPO;
   const branch = CONF.BRANCH;
-  // 【修正】環境変数を無視し、CONFのトークンを強制使用
-  const token  = CONF.TOKEN; 
+  const token  = CONF.TOKEN;
 
+  // 1. 指定ファイルを取得試行
   const imageUrl = `https://raw.githubusercontent.com/${user}/${repo}/${branch}/${filename}`;
   
   try {
@@ -48,38 +47,69 @@ app.get('/image/:filename', async (c) => {
       }
     });
     
-    if (!response.ok) {
-      const errorText = await response.text();
-      // トークンの先頭と長さを表示して確認
-      const tokenDebug = token ? `${token.substring(0, 4)}... (Length: ${token.length})` : 'NONE';
-      
-      const report = [
-        "========== DEBUG INFO ==========",
-        `Fetch Failed (Status: ${response.status})`,
-        "",
-        "[Target URL]",
-        imageUrl,
-        "",
-        "[Config Used (Forced Hardcode)]",
-        `User: ${user}`,
-        `Repo: ${repo}`,
-        `Branch: ${branch}`,
-        `Token: ${tokenDebug}`,
-        "",
-        "[GitHub Response]",
-        errorText,
-        "================================"
-      ].join("\n");
-
-      return c.text(report, 404);
+    // 2. 成功なら画像を返す
+    if (response.ok) {
+      return new Response(response.body, {
+        headers: {
+          'Content-Type': 'image/jpeg',
+          'Cache-Control': 'public, max-age=86400'
+        }
+      });
     }
+
+    // 3. 失敗時：リポジトリのルートにあるファイル一覧を取得する (犯人探し)
+    let debugInfo = "";
+    const listUrl = `https://api.github.com/repos/${user}/${repo}/contents?ref=${branch}`;
     
-    return new Response(response.body, {
+    const listResponse = await fetch(listUrl, {
       headers: {
-        'Content-Type': 'image/jpeg',
-        'Cache-Control': 'public, max-age=86400'
+        'Authorization': `token ${token}`,
+        'User-Agent': 'Cloudflare-Workers',
+        'Accept': 'application/vnd.github.v3+json'
       }
     });
+
+    if (listResponse.ok) {
+      const files = await listResponse.json() as any[];
+      // ファイル名の一覧を作成
+      const names = files.map(f => `- ${f.name} (${f.type})`).join("\n");
+      
+      debugInfo = `
+[SUCCESS: Accessed Repository Root]
+Files found in '${branch}' branch:
+----------------------------------
+${names}
+----------------------------------
+Target File: "${filename}"
+Is Target in List?: ${files.some(f => f.name === filename) ? "YES" : "NO"}
+`;
+    } else {
+      const errText = await listResponse.text();
+      debugInfo = `
+[FAILED: Could not list files]
+Status: ${listResponse.status}
+Response: ${errText}
+Hint: If 404, Repo name or Branch name might be wrong.
+`;
+    }
+
+    // 4. レポート出力
+    return c.text(`
+========== DEBUG REPORT ==========
+Image Fetch Failed (Status: ${response.status})
+
+[Config Used]
+User: ${user}
+Repo: ${repo}
+Branch: ${branch}
+Token: ${token.substring(0, 4)}... (Length: ${token.length})
+
+[Target URL]
+${imageUrl}
+
+${debugInfo}
+================================
+    `, 404);
 
   } catch (e: any) {
     return c.text(`System Error: ${e.message}`, 500);
@@ -145,6 +175,7 @@ app.get('/og-image', async (c) => {
 app.get('/', (c) => {
   const baseUrl = new URL(c.req.url).origin;
   
+  // プロキシ経由の画像URL (環境変数 IMAGE_FILENAME を使用)
   const imageFile = CONF.IMAGE;
   const ogImageUrl = `${baseUrl}/image/${imageFile}`;
 
@@ -387,7 +418,7 @@ app.get('/', (c) => {
         
         <div class="footer">
           <a onclick="openModal()">利用規約・プライバシーポリシー</a><br><br>
-          System v2.9.0 (Debug)
+          System v2.9.1 (Debug)
         </div>
       </div>
 
@@ -517,7 +548,6 @@ app.get('/', (c) => {
   `)
 })
 
-// ... (以下、POST /generate は変更なし)
 app.post('/generate', async (c) => {
   try {
     const { reason } = await c.req.json<{ reason: string }>()
@@ -605,7 +635,7 @@ app.post('/generate', async (c) => {
         body: JSON.stringify({
           userMessage: reason,
           aiResponse: JSON.stringify(aiResult) 
-               })
+        })
       }).catch(err => {
         console.error("GAS Log send failed:", err);
       })
