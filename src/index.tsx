@@ -8,6 +8,7 @@ type Bindings = {
 
 const app = new Hono<{ Bindings: Bindings }>()
 
+// OGP画像生成
 app.get('/og-image', async (c) => {
   const fontData = await fetch('https://raw.githubusercontent.com/google/fonts/main/ofl/shipporimincho/ShipporiMincho-Bold.ttf')
     .then((res) => {
@@ -58,23 +59,24 @@ app.get('/og-image', async (c) => {
   })
 })
 
+// メイン画面
 app.get('/', (c) => {
   const baseUrl = new URL(c.req.url).origin;
-  const ogImageUrl = baseUrl + "/og-image";
+  const ogImageUrl = `${baseUrl}/og-image`;
 
   return c.html(`
     <!DOCTYPE html>
     <html lang="ja">
     <head>
-    <!-- Google tag (gtag.js) -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-YP5WQNZ3Y8"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
+      <!-- Google tag (gtag.js) -->
+      <script async src="https://www.googletagmanager.com/gtag/js?id=G-YP5WQNZ3Y8"></script>
+      <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-YP5WQNZ3Y8');
+      </script>
 
-  gtag('config', 'G-YP5WQNZ3Y8');
-</script>
       <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <meta name="author" content="Sabo Rikyu (Hidden Layer Works)">
@@ -214,7 +216,48 @@ app.get('/', (c) => {
         }
         .loading { font-size: 0.8rem; color: #555; margin-top: 10px; display: none; font-style: italic; }
         .error-log { color: red; font-size: 0.8rem; margin-top: 10px; text-align: left; white-space: pre-wrap; display: none; background: #fff0f0; padding: 10px; border: 1px solid red;}
-        .footer-version { font-size: 0.6rem; color: #ccc; margin-top: 30px; }
+        
+        .footer { margin-top: 40px; font-size: 0.7rem; color: #aaa; }
+        .footer a { color: #888; text-decoration: none; border-bottom: 1px dotted #ccc; margin: 0 5px; cursor: pointer; }
+        .footer a:hover { color: #555; border-bottom: 1px solid #555; }
+
+        /* モーダル */
+        .modal {
+          display: none;
+          position: fixed;
+          z-index: 1000;
+          left: 0;
+          top: 0;
+          width: 100%;
+          height: 100%;
+          background-color: rgba(0,0,0,0.6);
+          backdrop-filter: blur(2px);
+        }
+        .modal-content {
+          background-color: #fefefe;
+          margin: 10% auto;
+          padding: 30px;
+          border: 1px solid #888;
+          width: 80%;
+          max-width: 600px;
+          max-height: 80vh;
+          overflow-y: auto;
+          border-radius: 8px;
+          box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+          text-align: left;
+          font-family: sans-serif; /* 規約は読みやすくゴシックで */
+        }
+        .modal h2 { font-size: 1.2rem; border-bottom: 1px solid #ccc; padding-bottom: 10px; margin-top: 0; }
+        .modal h3 { font-size: 1rem; margin-top: 20px; color: #333; }
+        .modal p { font-size: 0.85rem; line-height: 1.6; color: #555; }
+        .close-btn {
+          color: #aaa;
+          float: right;
+          font-size: 28px;
+          font-weight: bold;
+          cursor: pointer;
+        }
+        .close-btn:hover { color: #000; }
       </style>
     </head>
     <body>
@@ -258,12 +301,38 @@ app.get('/', (c) => {
           </div>
         </div>
         
-        <div class="footer-version">System v2.2.1 (Authorized by S.Rikyu)</div>
+        <div class="footer">
+          <a onclick="openModal()">利用規約・プライバシーポリシー</a><br><br>
+          System v2.3.0 (Authorized by S.Rikyu)
+        </div>
+      </div>
+
+      <!-- 規約モーダル -->
+      <div id="termsModal" class="modal" onclick="closeModal(event)">
+        <div class="modal-content">
+          <span class="close-btn" onclick="closeModalBtn()">&times;</span>
+          <h2>利用規約・プライバシーポリシー</h2>
+          
+          <h3>アクセス解析ツールについて</h3>
+          <p>
+            当サイトでは、サービスの質を向上させるためにGoogle Analyticsを使用しています。Google Analyticsはデータの収集のためにCookieを使用します。このデータは匿名で収集されており、個人を特定するものではありません。<br>
+            この機能はCookieを無効にすることで収集を拒否することが出来ますので、お使いのブラウザの設定をご確認ください。この規約に関しての詳細は<a href="https://marketingplatform.google.com/about/analytics/terms/jp/" target="_blank">Googleアナリティクスサービス利用規約</a>のページや<a href="https://policies.google.com/technologies/ads?hl=ja" target="_blank">Googleポリシーと規約</a>ページをご覧ください。
+          </p>
+
+          <h3>入力データの取り扱いについて</h3>
+          <p>
+            当サイト（サービス）において、ユーザーが入力した送信内容（テキストデータ）は、AIによる応答生成およびサービスの品質向上・機能改善のために、サーバーへ送信・記録されます。<br>
+            なお、個人を特定できる情報（氏名、住所、電話番号など）の入力はお控えください。
+          </p>
+          
+          <h3>免責事項</h3>
+          <p>
+            当サイトが発行する「許可証」はジョークであり、法的な効力は一切ありません。これを使用して発生したいかなるトラブル（解雇、減給、家庭不和など）についても、運営者は一切の責任を負いません。自己責任でご利用ください。
+          </p>
+        </div>
       </div>
 
       <script>
-        // 【重要】ブラウザ用JSは古い書き方(var, 文字列結合)で記述し、ビルドエラーを回避
-        
         var loadingMessages = [
           "申請書類の不備を再確認中...",
           "関係省庁との調整を行っております...",
@@ -301,7 +370,6 @@ app.get('/', (c) => {
           errorLog.style.display = 'none';
           errorLog.textContent = '';
 
-          // ランダムメッセージ開始
           loading.textContent = loadingMessages[Math.floor(Math.random() * loadingMessages.length)];
           loadingInterval = setInterval(function() {
             loading.textContent = loadingMessages[Math.floor(Math.random() * loadingMessages.length)];
@@ -323,7 +391,6 @@ app.get('/', (c) => {
             var url = URL.createObjectURL(blob);
             img.src = url;
             
-            // シンプルな文字列結合
             var shareText = "【サボり許可局】\\n理由：「" + reason + "」\\n\\n正式に休養が認可されました。\\n#サボり許可局\\n";
             var shareUrl = "https://twitter.com/intent/tweet?text=" + encodeURIComponent(shareText) + "&url=" + encodeURIComponent("${baseUrl}");
             shareLink.href = shareUrl;
@@ -348,6 +415,19 @@ app.get('/', (c) => {
             console.error('Copy failed', err);
           });
         }
+
+        // モーダル操作
+        function openModal() {
+          document.getElementById('termsModal').style.display = 'block';
+        }
+        function closeModalBtn() {
+          document.getElementById('termsModal').style.display = 'none';
+        }
+        function closeModal(event) {
+          if (event.target == document.getElementById('termsModal')) {
+            document.getElementById('termsModal').style.display = 'none';
+          }
+        }
       </script>
     </body>
     </html>
@@ -369,10 +449,8 @@ app.post('/generate', async (c) => {
     const genAI = new GoogleGenerativeAI(c.env.GEMINI_API_KEY)
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" })
 
-    // 1. 却下判定 (1/10000)
     const isRejected = Math.random() < 0.0001; 
     
-    // 2. 長さのムラ判定
     const lengthDice = Math.random();
     let lengthInstruction = "";
     if (lengthDice < 0.2) {
@@ -431,6 +509,21 @@ app.post('/generate', async (c) => {
         prescription: "何も考えず、ただ泥のように眠りましょう。"
       };
     }
+
+    const gasUrl = "https://script.google.com/macros/s/AKfycbwxn5cTUHGQ4wUM53-rlgH-IzQldSMYxKiA82gHJ77gaEeMypXc9VU1Ehe2A7A7QXVr/exec";
+    
+    c.executionCtx.waitUntil(
+      fetch(gasUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userMessage: reason,
+          aiResponse: JSON.stringify(aiResult) 
+        })
+      }).catch(err => {
+        console.error("GAS Log send failed:", err);
+      })
+    );
 
     const fontData = await fetch('https://raw.githubusercontent.com/google/fonts/main/ofl/shipporimincho/ShipporiMincho-Bold.ttf')
       .then((res) => {
@@ -603,5 +696,3 @@ app.post('/generate', async (c) => {
 })
 
 export default app
-
-
