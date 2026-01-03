@@ -2,18 +2,15 @@ import { Hono } from 'hono'
 import satori from 'satori'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 
-// -------------------------------------------------------------------------
-// 【設定】GitHubのリポジトリ情報（ここを書き換えてください）
-// -------------------------------------------------------------------------
-const GITHUB_USER = 'YOUR_GITHUB_USERNAME'; // 例: ryu-dev
-const GITHUB_REPO = 'sabori-agency';        // リポジトリ名
-const GITHUB_BRANCH = 'main';               // ブランチ名 (main または master)
-const IMAGE_FILENAME = '1767440233185.jpg'; // アップロードした画像ファイル名
-// -------------------------------------------------------------------------
-
+// 環境変数の型定義
 type Bindings = {
   GEMINI_API_KEY: string
-  GITHUB_TOKEN: string // 追加: GitHub通行手形
+  GITHUB_TOKEN: string
+  // 以下、追加した環境変数
+  GITHUB_USER: string
+  GITHUB_REPO: string
+  GITHUB_BRANCH: string
+  IMAGE_FILENAME: string
 }
 
 const app = new Hono<{ Bindings: Bindings }>()
@@ -24,30 +21,39 @@ const app = new Hono<{ Bindings: Bindings }>()
 app.get('/image/:filename', async (c) => {
   const filename = c.req.param('filename');
   
-  // GitHub APIを使ってRawデータを取得するためのURL
-  // Privateリポジトリの場合、raw.githubusercontent.com に直接アクセスするにはTokenが必要
-  const imageUrl = `https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/${GITHUB_BRANCH}/${filename}`;
-  
-  const response = await fetch(imageUrl, {
-    headers: {
-      'Authorization': `token ${c.env.GITHUB_TOKEN}`, // ここで手形を提示
-      'User-Agent': 'Cloudflare-Workers' // GitHub APIはUser-Agentが必須
-    }
-  });
-  
-  if (!response.ok) {
-    return c.text('Image not found in GitHub', 404);
+  // 環境変数から情報を取得してURLを構築
+  // もし環境変数が設定されていなければエラーにする防御策
+  if (!c.env.GITHUB_USER || !c.env.GITHUB_REPO) {
+    return c.text('Server Configuration Error: GitHub Variables missing', 500);
   }
+
+  const imageUrl = `https://raw.githubusercontent.com/${c.env.GITHUB_USER}/${c.env.GITHUB_REPO}/${c.env.GITHUB_BRANCH}/${filename}`;
   
-  return new Response(response.body, {
-    headers: {
-      'Content-Type': 'image/jpeg', // JPEGと仮定
-      'Cache-Control': 'public, max-age=86400' // 1日キャッシュ
+  try {
+    const response = await fetch(imageUrl, {
+      headers: {
+        'Authorization': `token ${c.env.GITHUB_TOKEN}`,
+        'User-Agent': 'Cloudflare-Workers'
+      }
+    });
+    
+    if (!response.ok) {
+      console.error(`GitHub Fetch Error: ${response.status} for ${imageUrl}`);
+      return c.text('Image not found in GitHub', 404);
     }
-  });
+    
+    return new Response(response.body, {
+      headers: {
+        'Content-Type': 'image/jpeg',
+        'Cache-Control': 'public, max-age=86400'
+      }
+    });
+  } catch (e) {
+    return c.text('Internal Server Error while fetching image', 500);
+  }
 })
 
-// OGP画像生成
+// OGP画像生成 (動的)
 app.get('/og-image', async (c) => {
   const fontData = await fetch('https://raw.githubusercontent.com/google/fonts/main/ofl/shipporimincho/ShipporiMincho-Bold.ttf')
     .then((res) => {
@@ -102,8 +108,12 @@ app.get('/og-image', async (c) => {
 app.get('/', (c) => {
   const baseUrl = new URL(c.req.url).origin;
   
-  // ★ プロキシ経由の画像URLを指定
-  const ogImageUrl = `${baseUrl}/image/${IMAGE_FILENAME}`;
+  // プロキシ経由の画像URL (環境変数 IMAGE_FILENAME を使用)
+  // 変数がなければ動的OGPにフォールバック
+  const imageFile = c.env.IMAGE_FILENAME || '1767440233185.jpg';
+  const ogImageUrl = c.env.IMAGE_FILENAME 
+    ? `${baseUrl}/image/${imageFile}`
+    : `${baseUrl}/og-image`;
 
   return c.html(`
     <!DOCTYPE html>
@@ -344,7 +354,7 @@ app.get('/', (c) => {
         
         <div class="footer">
           <a onclick="openModal()">利用規約・プライバシーポリシー</a><br><br>
-          System v2.5.0 (Authorized by S.Rikyu)
+          System v2.6.0 (Authorized by S.Rikyu)
         </div>
       </div>
 
